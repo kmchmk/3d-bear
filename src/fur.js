@@ -1,11 +1,10 @@
 import * as THREE from 'three'
 import { FUR_MAP, FUR_MAP_LIMB } from './textures.js'
 
-// Shell-fur material: MeshStandardMaterial extended so each instance of an
-// InstancedMesh represents one "shell" displaced along vertex normals and
-// alpha-masked by a strand texture. Layer 0 is the skin, higher layers are
-// progressively sparser hair tips.
-export function makeFurMaterial({ furLength = 0.05, limb = false, uvScale = [1, 1] } = {}) {
+// Shell-fur material v2: each InstancedMesh instance is one "shell" displaced
+// along vertex normals, bent toward a per-part groom direction, with
+// per-strand length variation for a natural wispy silhouette.
+export function makeFurMaterial({ furLength = 0.05, limb = false, uvScale = [1, 1], groom = [0, 0, 0] } = {}) {
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 0.97,
@@ -16,11 +15,13 @@ export function makeFurMaterial({ furLength = 0.05, limb = false, uvScale = [1, 
   const uFurLength = { value: furLength }
   const uDensity = { value: 1.0 }
   const uUvScale = { value: new THREE.Vector2(uvScale[0], uvScale[1]) }
+  const uGroom = { value: new THREE.Vector3(...groom) }
 
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uFurLength = uFurLength
     shader.uniforms.uDensity = uDensity
     shader.uniforms.uUvScale = uUvScale
+    shader.uniforms.uGroom = uGroom
     shader.uniforms.uFurMap = { value: limb ? FUR_MAP_LIMB : FUR_MAP }
 
     shader.vertexShader = shader.vertexShader
@@ -28,28 +29,44 @@ export function makeFurMaterial({ furLength = 0.05, limb = false, uvScale = [1, 
         '#include <common>',
         `#include <common>
         uniform float uFurLength;
+        uniform vec3 uGroom;
         attribute float aLayer;
-        varying float vLayer;`
+        varying float vLayer;
+        float strandHash(vec3 p) {
+          // sine-free hash (sin of large args loses precision -> streaks)
+          p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
+          p *= 17.0;
+          return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+        }`
       )
       .replace(
         '#include <beginnormal_vertex>',
         `#include <beginnormal_vertex>
         // per-shell normal jitter breaks up specular banding between shells
         {
-          vec3 seed = position * 91.17 + aLayer * 43.7;
+          vec3 sp = floor(position * 14.0) + aLayer * 7.0;
           vec3 h = vec3(
-            fract(sin(dot(seed.xy, vec2(12.9898, 78.233))) * 43758.5453),
-            fract(sin(dot(seed.yz, vec2(39.3467, 11.135))) * 24634.6345),
-            fract(sin(dot(seed.zx, vec2(69.1345, 53.5353))) * 97531.5313)
+            fract(sp.x * 0.1031 + sp.y * 0.11369 + sp.z * 0.13787),
+            fract(sp.y * 0.0973 + sp.z * 0.10993 + sp.x * 0.12731),
+            fract(sp.z * 0.11731 + sp.x * 0.10369 + sp.y * 0.09787)
           );
-          objectNormal = normalize(objectNormal + (h - 0.5) * 0.6 * aLayer);
+          h = fract(h * 17.0 + h.yzx * 13.0);
+          objectNormal = normalize(objectNormal + (h - 0.5) * 0.55 * aLayer);
         }`
       )
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
         vLayer = aLayer;
-        transformed += normalize(normal) * uFurLength * aLayer;`
+        {
+          float h = strandHash(floor(position * 14.0) + 0.5);
+          float len = uFurLength * (0.74 + 0.52 * h);
+          vec3 dir = normalize(normal);
+          float l = aLayer;
+          // grow along the normal, then bend toward the groom direction
+          transformed += dir * len * l;
+          transformed += uGroom * (len * l * l);
+        }`
       )
 
     shader.fragmentShader = shader.fragmentShader
@@ -67,10 +84,14 @@ export function makeFurMaterial({ furLength = 0.05, limb = false, uvScale = [1, 
         float strandA = texture2D(uFurMap, vUv * uUvScale).a;
         // fade shells toward silhouettes to avoid grazing-angle streaking
         float rim = abs(dot(normalize(vNormal), normalize(vViewPosition)));
-        float rimFade = smoothstep(0.04, 0.3, rim);
+        float rimFade = smoothstep(0.03, 0.24, rim);
         if (strandA * uDensity * rimFade < vLayer) discard;
-        diffuseColor.rgb *= mix(0.68, 1.1, vLayer);
-        diffuseColor.rgb *= mix(0.9, 1.0, strandA);`
+        // dark roots (AO), warm golden tips
+        diffuseColor.rgb *= mix(vec3(0.5, 0.44, 0.4), vec3(1.16, 1.1, 0.98), vLayer);
+        diffuseColor.rgb *= mix(vec3(1.06, 1.0, 0.94), vec3(1.0), strandA);
+        // subtle warm variation between strands
+        float warm = fract(sin(dot(floor(vUv * uUvScale * 36.0), vec2(127.1, 311.7))) * 43758.5453);
+        diffuseColor.rgb *= vec3(1.0 + (warm - 0.5) * 0.1, 1.0, 1.0 - (warm - 0.5) * 0.12);`
       )
   }
   mat.customProgramCacheKey = () => 'puppy-fur-' + (limb ? 'limb' : 'body')
@@ -79,9 +100,9 @@ export function makeFurMaterial({ furLength = 0.05, limb = false, uvScale = [1, 
 
 // Builds skin + shells for a furry part. Geometry must have position/normal/uv
 // and vertex colours already painted. Returns a group containing both meshes.
-export function makeFurPart(geometry, { layers = 14, furLength = 0.05, limb = false, uvScale = [1, 1] } = {}) {
+export function makeFurPart(geometry, { layers = 14, furLength = 0.05, limb = false, uvScale = [1, 1], groom = [0, 0, 0] } = {}) {
   const group = new THREE.Group()
-  const furMat = makeFurMaterial({ furLength, limb, uvScale })
+  const furMat = makeFurMaterial({ furLength, limb, uvScale, groom })
 
   // skin: plain material, slightly darkened so gaps between strands read as roots
   const skinMat = new THREE.MeshStandardMaterial({
@@ -89,7 +110,7 @@ export function makeFurPart(geometry, { layers = 14, furLength = 0.05, limb = fa
     roughness: 0.95,
     metalness: 0,
   })
-  skinMat.color.setScalar(0.72)
+  skinMat.color.setScalar(0.55)
   const skin = new THREE.Mesh(geometry, skinMat)
   skin.castShadow = true
   group.add(skin)

@@ -11,26 +11,34 @@ function mulberry32(seed) {
 }
 
 // Cellular strand pattern used as alpha mask across shell layers.
-// Strands are bucketed per cell so generation stays fast.
-function makeStrandTexture(size = 1024, cells = 28, angleJitter = 0.55) {
+// Long, gently curved strands, bucketed per cell for fast generation.
+function makeStrandTexture(size = 1024, cells = 34, angleJitter = 0.55, minStrands = 1) {
   const rnd = mulberry32(1234)
   const cs = size / cells
   const buckets = Array.from({ length: cells * cells }, () => [])
   for (let cy = 0; cy < cells; cy++) {
     for (let cx = 0; cx < cells; cx++) {
-      const n = 1 + (rnd() < 0.6 ? 1 : 0)
+      const n = minStrands + (rnd() < 0.55 ? 1 : 0)
       for (let s = 0; s < n; s++) {
-        const ox = (cx + rnd()) * cs
-        const oy = (cy + rnd()) * cs
+        const x0 = (cx + rnd()) * cs
+        const y0 = (cy + rnd()) * cs
         const ang = Math.PI / 2 + (rnd() - 0.5) * angleJitter * Math.PI
-        const len = cs * (0.9 + rnd() * 0.8)
+        const len = cs * (1.25 + rnd() * 1.05)
+        const bend = (rnd() - 0.5) * 0.9
+        const mx = x0 + Math.cos(ang + bend) * len * 0.55
+        const my = y0 + Math.sin(ang + bend) * len * 0.55
+        const x1 = x0 + Math.cos(ang) * len
+        const y1 = y0 + Math.sin(ang) * len
         buckets[cy * cells + cx].push({
-          x0: ox,
-          y0: oy,
-          x1: ox + Math.cos(ang) * len,
-          y1: oy + Math.sin(ang) * len,
-          w: cs * (0.14 + rnd() * 0.08),
-          b: 0.9 + rnd() * 0.2,
+          x0,
+          y0,
+          mx,
+          my,
+          x1,
+          y1,
+          w: cs * (0.13 + rnd() * 0.07),
+          b: 0.86 + rnd() * 0.28,
+          warm: rnd(),
         })
       }
     }
@@ -43,6 +51,7 @@ function makeStrandTexture(size = 1024, cells = 28, angleJitter = 0.55) {
       const cx = Math.floor(x / cs)
       let best = 1e9
       let bb = 1
+      let ww = 0.5
       for (let dy = -1; dy <= 1; dy++)
         for (let dx = -1; dx <= 1; dx++) {
           const bx = wrap(cx + dx)
@@ -56,27 +65,46 @@ function makeStrandTexture(size = 1024, cells = 28, angleJitter = 0.55) {
             const s = cell[k]
             const sx = s.x0 - wx
             const sy = s.y0 - wy
+            const qx0 = s.mx - wx
+            const qy0 = s.my - wy
             const ex = s.x1 - wx
             const ey = s.y1 - wy
-            let ddx = ex - sx
-            let ddy = ey - sy
-            const ll = ddx * ddx + ddy * ddy || 1
-            let t = ((px - sx) * ddx + (py - sy) * ddy) / ll
-            t = t < 0 ? 0 : t > 1 ? 1 : t
-            const qx = sx + ddx * t - px
-            const qy = sy + ddy * t - py
-            const d = Math.sqrt(qx * qx + qy * qy) - s.w
-            if (d < best) {
-              best = d
+            // distance to quadratic bezier (coarse: sample 6 segments)
+            let px2 = sx
+            let py2 = sy
+            let dBest = 1e9
+            for (let t = 1; t <= 6; t++) {
+              const u = t / 6
+              const v = 1 - u
+              const bx2 = v * v * sx + 2 * v * u * qx0 + u * u * ex
+              const by2 = v * v * sy + 2 * v * u * qy0 + u * u * ey
+              const mx2 = (px2 + bx2) * 0.5
+              const my2 = (py2 + by2) * 0.5
+              const ddx = bx2 - px2
+              const ddy = by2 - py2
+              const ll = ddx * ddx + ddy * ddy || 1
+              let tt = ((px - mx2) * ddx + (py - my2) * ddy) / ll
+              tt = tt < 0 ? 0 : tt > 1 ? 1 : tt
+              const rx = mx2 + ddx * tt - px
+              const ry = my2 + ddy * tt - py
+              const d = Math.sqrt(rx * rx + ry * ry) - s.w
+              if (d < dBest) dBest = d
+              px2 = bx2
+              py2 = by2
+            }
+            if (dBest < best) {
+              best = dBest
               bb = s.b
+              ww = s.warm
             }
           }
         }
       const i = (y * size + x) * 4
-      const a = best < 0 ? 1 : best > 1 ? 0 : 1 - best
-      img[i] = Math.round(255 * bb)
+      // soft edge: fade over ~4px so the shell height-field has gentle slopes
+      const a = Math.max(0, Math.min(1, (1.4 - best) / 4))
+      img[i] = Math.round(255 * bb * (1 + (ww - 0.5) * 0.12))
       img[i + 1] = Math.round(255 * bb)
-      img[i + 2] = Math.round(255 * bb)
+      img[i + 2] = Math.round(255 * bb * (1 - (ww - 0.5) * 0.16))
       img[i + 3] = Math.round(a * 255)
     }
   }
@@ -92,7 +120,7 @@ function makeStrandTexture(size = 1024, cells = 28, angleJitter = 0.55) {
 
 export const FUR_MAP = makeStrandTexture()
 // fully random strand directions — for limbs where UV-aligned strands stripe
-export const FUR_MAP_LIMB = makeStrandTexture(1024, 28, 2.0)
+export const FUR_MAP_LIMB = makeStrandTexture(1024, 34, 2.0, 2)
 
 // Amber puppy iris painted on canvas.
 function makeIris() {
@@ -102,12 +130,12 @@ function makeIris() {
   const g = c.getContext('2d')
   g.fillStyle = '#20140c'
   g.fillRect(0, 0, s, s)
-  const cx = s / 2,
-    cy = s / 2
+  const cx = s / 2
+  const cy = s / 2
   let grad = g.createRadialGradient(cx, cy, 10, cx, cy, s * 0.46)
-  grad.addColorStop(0, '#7a6a30')
-  grad.addColorStop(0.55, '#96995d')
-  grad.addColorStop(0.85, '#a8ab6a')
+  grad.addColorStop(0, '#4a3f1e')
+  grad.addColorStop(0.55, '#77683a')
+  grad.addColorStop(0.85, '#8a7a45')
   grad.addColorStop(1, '#5c5024')
   g.fillStyle = grad
   g.beginPath()

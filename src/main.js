@@ -103,7 +103,7 @@ scene.add(ground)
 }
 
 // ---------- puppy ----------
-const LAYERS = MOBILE ? 10 : 16
+const LAYERS = MOBILE ? 12 : 22
 const { group: puppy, rig } = buildPuppy({ layers: LAYERS })
 scene.add(puppy)
 puppy.rotation.y = -0.35 // slightly angled initial pose
@@ -261,6 +261,9 @@ renderer.setAnimationLoop(() => {
   adaptResolution(dt)
   renderer.render(scene, camera)
 })
+
+window.__controls = controls
+window.__camera = camera
 
 // fade out loading veil once first frame is up
 requestAnimationFrame(() => requestAnimationFrame(() => {
