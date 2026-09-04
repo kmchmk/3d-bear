@@ -1,130 +1,99 @@
 import * as THREE from 'three'
-import { FUR_MAP, FUR_MAP_LIMB } from './textures.js'
+import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js'
 
-// Shell-fur material v2: each InstancedMesh instance is one "shell" displaced
-// along vertex normals, bent toward a per-part groom direction, with
-// per-strand length variation for a natural wispy silhouette.
-export function makeFurMaterial({ furLength = 0.05, limb = false, uvScale = [1, 1], groom = [0, 0, 0] } = {}) {
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0.97,
-    metalness: 0,
-    vertexColors: true,
-  })
-  mat.defines = { USE_UV: '' }
-  const uFurLength = { value: furLength }
-  const uDensity = { value: 1.0 }
-  const uUvScale = { value: new THREE.Vector2(uvScale[0], uvScale[1]) }
-  const uGroom = { value: new THREE.Vector3(...groom) }
-
-  mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uFurLength = uFurLength
-    shader.uniforms.uDensity = uDensity
-    shader.uniforms.uUvScale = uUvScale
-    shader.uniforms.uGroom = uGroom
-    shader.uniforms.uFurMap = { value: limb ? FUR_MAP_LIMB : FUR_MAP }
-
-    shader.vertexShader = shader.vertexShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        uniform float uFurLength;
-        uniform vec3 uGroom;
-        attribute float aLayer;
-        varying float vLayer;
-        float strandHash(vec3 p) {
-          // sine-free hash (sin of large args loses precision -> streaks)
-          p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
-          p *= 17.0;
-          return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
-        }`
-      )
-      .replace(
-        '#include <beginnormal_vertex>',
-        `#include <beginnormal_vertex>
-        // per-shell normal jitter breaks up specular banding between shells
-        {
-          vec3 sp = floor(position * 14.0) + aLayer * 7.0;
-          vec3 h = vec3(
-            fract(sp.x * 0.1031 + sp.y * 0.11369 + sp.z * 0.13787),
-            fract(sp.y * 0.0973 + sp.z * 0.10993 + sp.x * 0.12731),
-            fract(sp.z * 0.11731 + sp.x * 0.10369 + sp.y * 0.09787)
-          );
-          h = fract(h * 17.0 + h.yzx * 13.0);
-          objectNormal = normalize(objectNormal + (h - 0.5) * 0.55 * aLayer);
-        }`
-      )
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-        vLayer = aLayer;
-        {
-          float h = strandHash(floor(position * 14.0) + 0.5);
-          float len = uFurLength * (0.74 + 0.52 * h);
-          vec3 dir = normalize(normal);
-          float l = aLayer;
-          // grow along the normal, then bend toward the groom direction
-          transformed += dir * len * l;
-          transformed += uGroom * (len * l * l);
-        }`
-      )
-
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        uniform sampler2D uFurMap;
-        uniform float uDensity;
-        uniform vec2 uUvScale;
-        varying float vLayer;`
-      )
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        float strandA = texture2D(uFurMap, vUv * uUvScale).a;
-        // fade shells toward silhouettes to avoid grazing-angle streaking
-        float rim = abs(dot(normalize(vNormal), normalize(vViewPosition)));
-        float rimFade = smoothstep(0.03, 0.24, rim);
-        if (strandA * uDensity * rimFade < vLayer) discard;
-        // dark roots (AO), warm golden tips
-        diffuseColor.rgb *= mix(vec3(0.5, 0.44, 0.4), vec3(1.16, 1.1, 0.98), vLayer);
-        diffuseColor.rgb *= mix(vec3(1.06, 1.0, 0.94), vec3(1.0), strandA);
-        // subtle warm variation between strands
-        float warm = fract(sin(dot(floor(vUv * uUvScale * 36.0), vec2(127.1, 311.7))) * 43758.5453);
-        diffuseColor.rgb *= vec3(1.0 + (warm - 0.5) * 0.1, 1.0, 1.0 - (warm - 0.5) * 0.12);`
-      )
+// Actual tapered fibers, sampled by triangle area. All dimensions are in model
+// space; geometry is sculpted at its final size before grooming.
+export function seededRandom(seed = 173) {
+  return () => {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed)
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t
+    return ((t ^ t >>> 14) >>> 0) / 4294967296
   }
-  mat.customProgramCacheKey = () => 'puppy-fur-' + (limb ? 'limb' : 'body')
-  return mat
 }
 
-// Builds skin + shells for a furry part. Geometry must have position/normal/uv
-// and vertex colours already painted. Returns a group containing both meshes.
-export function makeFurPart(geometry, { layers = 14, furLength = 0.05, limb = false, uvScale = [1, 1], groom = [0, 0, 0] } = {}) {
+export function makeFurPart(geometry, {
+  count = 12000, length = 0.035, width = 0.0008, groom = [0, -1, 0],
+  colorAt, lengthAt = () => 1, seed = 173
+} = {}) {
   const group = new THREE.Group()
-  const furMat = makeFurMaterial({ furLength, limb, uvScale, groom })
-
-  // skin: plain material, slightly darkened so gaps between strands read as roots
-  const skinMat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.95,
-    metalness: 0,
-  })
-  skinMat.color.setScalar(0.55)
-  const skin = new THREE.Mesh(geometry, skinMat)
+  const p = new THREE.Vector3(), c = new THREE.Color()
+  const color = new Float32Array(geometry.attributes.position.count * 3)
+  for (let i = 0; i < geometry.attributes.position.count; i++) {
+    p.fromBufferAttribute(geometry.attributes.position, i)
+    colorAt(p, c)
+    c.toArray(color, i * 3)
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(color, 3))
+  const baseMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })
+  // Fine undercoat grain remains visible between individual guard hairs.
+  baseMaterial.onBeforeCompile = shader => {
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 coatPosition;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\ncoatPosition = position;')
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 coatPosition;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        float grain = fract(sin(dot(floor(coatPosition * 2100.0), vec3(12.9898,78.233,41.45))) * 43758.5453);
+        diffuseColor.rgb *= 0.72 + 0.30 * grain;`)
+  }
+  const skin = new THREE.Mesh(geometry, baseMaterial)
   skin.castShadow = true
+  skin.receiveShadow = true
   group.add(skin)
 
-  const g = geometry.clone()
-  const layerVals = new Float32Array(layers)
-  for (let i = 0; i < layers; i++) layerVals[i] = (i + 1) / layers
-  g.setAttribute('aLayer', new THREE.InstancedBufferAttribute(layerVals, 1))
-  const shells = new THREE.InstancedMesh(g, furMat, layers)
-  const id = new THREE.Matrix4()
-  for (let i = 0; i < layers; i++) shells.setMatrixAt(i, id)
-  shells.instanceMatrix.needsUpdate = true
-  shells.frustumCulled = false
-  group.add(shells)
-
+  const random = seededRandom(seed)
+  const sampler = new MeshSurfaceSampler(skin).setRandomGenerator(random).build()
+  const n = new THREE.Vector3(), tangent = new THREE.Vector3(), side = new THREE.Vector3()
+  const point = new THREE.Vector3()
+  const positions = [], normals = [], colors = [], indices = []
+  const segments = 3
+  for (let i = 0; i < count; i++) {
+    sampler.sample(p, n)
+    const scale = lengthAt(p, n)
+    if (scale <= 0) continue
+    colorAt(p, c)
+    const variation = 0.78 + random() * 0.40
+    c.multiplyScalar(variation)
+    if (typeof groom === 'function') groom(p, n, tangent)
+    else tangent.set(...groom)
+    // Tangential grooming preserves volume without spikes normal to the skin.
+    tangent.addScaledVector(n, -tangent.dot(n)).normalize()
+    side.crossVectors(n, tangent)
+    if (side.lengthSq() < 0.01) side.crossVectors(n, new THREE.Vector3(1, 0, 0))
+    side.normalize()
+    const len = length * scale * (0.55 + random() * 0.90)
+    const w = width * (0.60 + random() * 0.65)
+    const curl = (random() - 0.5) * len * 0.23
+    const offset = positions.length / 3
+    for (let j = 0; j <= segments; j++) {
+      const t = j / segments
+      point.copy(p).addScaledVector(n, len * t * (0.66 - 0.27 * t))
+        .addScaledVector(tangent, len * t * (0.38 + t * 0.50))
+        .addScaledVector(side, Math.sin(t * Math.PI * 0.8) * curl)
+      const taper = w * (1 - t * 0.94) * 0.5
+      for (const s of [-1, 1]) {
+        positions.push(point.x + side.x * taper * s, point.y + side.y * taper * s, point.z + side.z * taper * s)
+        normals.push(n.x, n.y, n.z)
+        const brightness = 0.78 + 0.27 * t
+        colors.push(c.r * brightness, c.g * brightness, c.b * brightness)
+      }
+      if (j < segments) {
+        const a = offset + j * 2
+        indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
+      }
+    }
+  }
+  const fibers = new THREE.BufferGeometry()
+  fibers.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  fibers.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  fibers.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+  fibers.setIndex(indices)
+  fibers.computeBoundingSphere()
+  const hair = new THREE.Mesh(fibers, new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.94, side: THREE.DoubleSide,
+  }))
+  hair.receiveShadow = true
+  // The closed undercoat casts the shadow; fine fibers soften the silhouette.
+  group.add(hair)
+  group.userData.fiberCount = positions.length / ((segments + 1) * 6)
   return group
 }

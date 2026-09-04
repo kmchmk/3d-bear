@@ -2,83 +2,216 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#f3e6d4" />
-    <title>Puppy · 3D</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7eee1" />
+    <link rel="icon" href="data:," />
+    <title>Bear · 3D portrait</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
       html, body {
         height: 100%;
         overflow: hidden;
-        background: radial-gradient(120% 90% at 50% 20%, #fdf6ec 0%, #f3e6d4 55%, #e2cdb4 100%);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: radial-gradient(120% 90% at 50% 20%, #fffcf7 0%, #f7eee1 55%, #e5d7c5 100%);
+        font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         -webkit-tap-highlight-color: transparent;
+        user-select: none;
       }
-      #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-
-      #veil {
+      #scene {
         position: fixed;
         inset: 0;
-        background: #f3e6d4;
-        z-index: 10;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: opacity 0.7s ease, visibility 0.7s;
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+      }
+
+      /* Header info */
+      #header {
+        position: fixed;
+        top: max(18px, env(safe-area-inset-top));
+        left: 20px;
+        z-index: 5;
         pointer-events: none;
       }
-      #veil.hide { opacity: 0; visibility: hidden; }
-      .paw {
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        background: #c08a52;
-        position: relative;
-        animation: pulse 1.2s ease-in-out infinite;
+      #header h1 {
+        color: #4a2d18;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
       }
-      .paw::before, .paw::after {
-        content: '';
-        position: absolute;
-        border-radius: 50%;
-        background: inherit;
+      #header p {
+        color: #7d5939;
+        font-size: 13px;
+        font-weight: 500;
+        margin-top: 2px;
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
       }
-      .paw::before { width: 18px; height: 18px; top: -12px; left: 6px; box-shadow: 14px 0 0 #c08a52; animation: inherit; }
-      @keyframes pulse { 0%, 100% { transform: scale(0.9); opacity: 0.7 } 50% { transform: scale(1); opacity: 1 } }
 
+      /* Quick control toolbar */
+      #toolbar {
+        position: fixed;
+        top: max(18px, env(safe-area-inset-top));
+        right: 20px;
+        z-index: 5;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        max-width: calc(100% - 170px);
+      }
+      .btn {
+        background: rgba(255, 255, 255, 0.78);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        color: #4a2d18;
+        padding: 8px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        box-shadow: 0 4px 16px rgba(74, 45, 24, 0.08);
+        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn[aria-pressed="true"] { background: #e1d3bd; border-color: #ae9675; }
+      .btn:focus-visible { outline: 2px solid #5b7190; outline-offset: 3px; }
+      .btn:hover {
+        background: rgba(255, 255, 255, 0.95);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(74, 45, 24, 0.15);
+      }
+      .btn:active {
+        transform: scale(0.96);
+      }
+      .btn-pet {
+        background: #54311b;
+        color: #fffaf4;
+        border-color: #54311b;
+      }
+      .btn-pet:hover {
+        background: #3e2110;
+        color: #ffffff;
+      }
+      /* Interaction Hint */
       #hint {
         position: fixed;
-        bottom: max(18px, env(safe-area-inset-bottom));
+        bottom: max(20px, env(safe-area-inset-bottom));
         left: 0;
         right: 0;
         text-align: center;
-        color: #8a6a48;
+        color: #7b5839;
         font-size: 13px;
-        letter-spacing: 0.04em;
+        font-weight: 500;
+        letter-spacing: 0.02em;
         z-index: 5;
         pointer-events: none;
         transition: opacity 1s ease;
       }
       #hint.fade { opacity: 0; }
 
-      #title {
+      /* Loading Veil */
+      #veil {
         position: fixed;
-        top: max(16px, env(safe-area-inset-top));
-        left: 20px;
-        color: #7a5a38;
-        font-weight: 600;
-        font-size: 15px;
-        letter-spacing: 0.06em;
-        z-index: 5;
+        inset: 0;
+        background: #f7eee1;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        transition: opacity 0.6s ease, visibility 0.6s;
         pointer-events: none;
-        opacity: 0.85;
+      }
+      #veil.hide { opacity: 0; visibility: hidden; }
+      .paw {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: #ad6f33;
+        position: relative;
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .paw::before {
+        content: '';
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        top: -14px;
+        left: 6px;
+        border-radius: 50%;
+        background: inherit;
+        box-shadow: 20px 0 0 #ad6f33;
+      }
+      .veil-text {
+        color: #54311b;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+      }
+      @keyframes pulse {
+        0%, 100% { transform: scale(0.92); opacity: 0.75; }
+        50% { transform: scale(1.05); opacity: 1; }
+      }
+
+      @media (max-width: 640px) {
+        #header h1 { font-size: 19px; }
+        #toolbar {
+          top: auto;
+          bottom: max(54px, calc(env(safe-area-inset-bottom) + 36px));
+          right: 0;
+          left: 0;
+          justify-content: center;
+          max-width: none;
+          flex-wrap: wrap;
+          padding: 0 10px;
+        }
+        .btn { padding: 6px 11px; font-size: 12px; }
+        #hint { font-size: 11px; }
       }
     </style>
   </head>
   <body>
-    <canvas id="scene"></canvas>
-    <div id="title">Bear</div>
-    <div id="hint">Drag to rotate &nbsp;·&nbsp; Scroll or pinch to zoom</div>
-    <div id="veil"><div class="paw"></div></div>
+    <canvas id="scene" aria-label="Interactive 3D portrait of Bear. Drag to orbit and scroll to zoom."></canvas>
+
+    <div id="header">
+      <h1>Bear</h1>
+      <p>A study of Bear</p>
+    </div>
+
+    <div id="toolbar">
+      <button class="btn btn-pet" onclick="window.petBear()">Pet Bear</button>
+      <button class="btn" data-view="face" aria-pressed="false" onclick="window.setView('face')">Face</button>
+      <button class="btn" data-view="default" aria-pressed="true" onclick="window.setView('default')">Full view</button>
+      <button class="btn" data-view="side" aria-pressed="false" onclick="window.setView('side')">Profile</button>
+      <button class="btn" data-view="front" aria-pressed="false" onclick="window.setView('front')">Front</button>
+      <button class="btn" id="motion-button" aria-pressed="false" onclick="window.toggleMotion()">Pause motion</button>
+      <button class="btn" id="rotate-button" aria-pressed="false" onclick="window.toggleRotate()">Turntable</button>
+    </div>
+
+    <div id="hint">Drag to 3D rotate &nbsp;·&nbsp; Pinch or scroll to zoom &nbsp;·&nbsp; Click or tap to pet</div>
+
+    <div id="veil">
+      <div class="paw"></div>
+      <div class="veil-text">Rendering Bear...</div>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

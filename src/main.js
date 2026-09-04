@@ -2,271 +2,161 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { buildPuppy } from './puppy.js'
+import { seededRandom } from './fur.js'
 
-const isCoarse = window.matchMedia('(pointer: coarse)').matches
-const isSmall = Math.min(window.innerWidth, window.innerHeight) < 700
-const MOBILE = isCoarse || isSmall
-
-// ---------- renderer ----------
+const mobile = matchMedia('(pointer: coarse)').matches || innerWidth < 700
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 const canvas = document.getElementById('scene')
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !MOBILE })
-let maxDpr = MOBILE ? 1.8 : 2
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDpr))
-renderer.setSize(window.innerWidth, window.innerHeight)
-renderer.outputColorSpace = THREE.SRGBColorSpace
-renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 1.05
-renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.VSMShadowMap
-
-// ---------- scene / camera ----------
-const scene = new THREE.Scene()
-{
-  const c = document.createElement('canvas')
-  c.width = 32
-  c.height = 256
-  const g = c.getContext('2d')
-  const grad = g.createLinearGradient(0, 0, 0, 256)
-  grad.addColorStop(0, '#fdf6ec')
-  grad.addColorStop(0.55, '#f3e6d4')
-  grad.addColorStop(1, '#e2cdb4')
-  g.fillStyle = grad
-  g.fillRect(0, 0, 32, 256)
-  const bg = new THREE.CanvasTexture(c)
-  bg.colorSpace = THREE.SRGBColorSpace
-  scene.background = bg
-}
-scene.fog = new THREE.Fog(0xe2cdb4, 9, 16)
-
-const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.1, 50)
-// pull back on narrow/portrait screens so the whole puppy fits
-const fitDistance = () => {
-  const aspect = window.innerWidth / window.innerHeight
-  return 3.9 * Math.max(1, 1.08 / Math.pow(Math.max(aspect, 0.01), 0.6))
-}
-camera.position.set(0.55, 1.25, 3.9).setLength(fitDistance())
-
-// ---------- environment light ----------
-const pmrem = new THREE.PMREMGenerator(renderer)
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-if ('environmentIntensity' in scene) scene.environmentIntensity = 0.5
-pmrem.dispose()
-
-// ---------- lights ----------
-const hemi = new THREE.HemisphereLight(0xfff3e3, 0xcbb59a, 0.55)
-scene.add(hemi)
-
-const key = new THREE.DirectionalLight(0xfff0da, 1.5)
-key.position.set(2.8, 5, 2.6)
-key.castShadow = true
-key.shadow.mapSize.set(MOBILE ? 1024 : 2048, MOBILE ? 1024 : 2048)
-const sc = key.shadow.camera
-sc.left = -3; sc.right = 3; sc.top = 3; sc.bottom = -2
-sc.near = 1; sc.far = 12
-key.shadow.bias = -0.0002
-key.shadow.radius = 7
-key.shadow.blurSamples = 10
+const renderer = new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
+renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2))
+renderer.setSize(innerWidth,innerHeight)
+renderer.outputColorSpace=THREE.SRGBColorSpace
+renderer.toneMapping=THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure=1.05
+renderer.shadowMap.enabled=true
+renderer.shadowMap.type=THREE.VSMShadowMap
+const scene=new THREE.Scene()
+scene.background=new THREE.Color('#e4e0d7')
+scene.fog=new THREE.Fog('#e4e0d7',8,18)
+const room=new RoomEnvironment(), pmrem=new THREE.PMREMGenerator(renderer)
+const environment=pmrem.fromScene(room,.04)
+scene.environment=environment.texture;scene.environmentIntensity=.42
+room.dispose();pmrem.dispose()
+scene.add(new THREE.HemisphereLight('#f5f7ff','#91816b',.90))
+const key=new THREE.DirectionalLight('#fff5e5',2.2)
+key.position.set(-3,5,4);key.castShadow=true
+key.shadow.mapSize.set(mobile?1024:2048,mobile?1024:2048)
+Object.assign(key.shadow.camera,{left:-2,right:2,top:2.5,bottom:-1.5,near:.5,far:12})
+key.shadow.bias=-.00015;key.shadow.normalBias=.012;key.shadow.radius=6;key.shadow.blurSamples=8
 scene.add(key)
+const fill=new THREE.DirectionalLight('#dce9ff',.60);fill.position.set(4,2,2);scene.add(fill)
+const rim=new THREE.DirectionalLight('#fff0d6',1.65);rim.position.set(1,3,-3);scene.add(rim)
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:'#ddd8cc',roughness:1}))
+floor.rotation.x=-Math.PI/2;floor.position.y=-.009;floor.receiveShadow=true;scene.add(floor)
+const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=256
+const ctx=shadowCanvas.getContext('2d'), gradient=ctx.createRadialGradient(128,128,0,128,128,128)
+gradient.addColorStop(0,'rgba(44,34,22,.38)');gradient.addColorStop(.4,'rgba(44,34,22,.17)');gradient.addColorStop(1,'rgba(44,34,22,0)')
+ctx.fillStyle=gradient;ctx.fillRect(0,0,256,256)
+const shadow=new THREE.Mesh(new THREE.PlaneGeometry(1.45,1.25),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(shadowCanvas),transparent:true,depthWrite:false}))
+shadow.rotation.x=-Math.PI/2;shadow.position.set(0,-.007,0);scene.add(shadow)
 
-const rim = new THREE.DirectionalLight(0xdfe9ff, 0.6)
-rim.position.set(-3, 2.6, -2.8)
-scene.add(rim)
-
-// ---------- ground ----------
-const ground = new THREE.Mesh(
-  new THREE.CircleGeometry(9, 48),
-  new THREE.ShadowMaterial({ opacity: 0.2 })
-)
-ground.rotation.x = -Math.PI / 2
-ground.receiveShadow = true
-scene.add(ground)
-
-// soft contact-shadow blob under the body
-{
-  const c = document.createElement('canvas')
-  c.width = c.height = 256
-  const g = c.getContext('2d')
-  const grad = g.createRadialGradient(128, 128, 10, 128, 128, 126)
-  grad.addColorStop(0, 'rgba(70,45,20,0.42)')
-  grad.addColorStop(0.55, 'rgba(70,45,20,0.18)')
-  grad.addColorStop(1, 'rgba(70,45,20,0)')
-  g.fillStyle = grad
-  g.fillRect(0, 0, 256, 256)
-  const tex = new THREE.CanvasTexture(c)
-  const blob = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.6, 2.2),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false })
-  )
-  blob.rotation.x = -Math.PI / 2
-  blob.position.y = 0.002
-  scene.add(blob)
-}
-
-// ---------- puppy ----------
-const LAYERS = MOBILE ? 12 : 22
-const { group: puppy, rig } = buildPuppy({ layers: LAYERS })
+const camera=new THREE.PerspectiveCamera(32,innerWidth/innerHeight,.05,40)
+const controls=new OrbitControls(camera,canvas)
+controls.enableDamping=true;controls.dampingFactor=.085;controls.enablePan=false
+controls.minDistance=.85;controls.maxDistance=7;controls.minPolarAngle=.25;controls.maxPolarAngle=1.55
+controls.autoRotate=false;controls.autoRotateSpeed=.45
+const {group:puppy,rig}=buildPuppy({quality:mobile?.48:1})
 scene.add(puppy)
-puppy.rotation.y = -0.35 // slightly angled initial pose
-
-// ---------- controls ----------
-const controls = new OrbitControls(camera, renderer.domElement)
-controls.target.set(0, 0.62, 0)
-controls.enableDamping = true
-controls.dampingFactor = 0.06
-controls.enablePan = false
-controls.minDistance = 1.7
-controls.maxDistance = 7
-controls.minPolarAngle = 0.25
-controls.maxPolarAngle = 1.52
-controls.rotateSpeed = 0.75
-controls.autoRotate = true
-controls.autoRotateSpeed = 0.7
-controls.addEventListener('start', () => {
-  controls.autoRotate = false
-})
-let userZoomed = false
-let distAtStart = 0
-controls.addEventListener('start', () => {
-  distAtStart = controls.getDistance()
-})
-controls.addEventListener('end', () => {
-  if (Math.abs(controls.getDistance() - distAtStart) > 0.25) userZoomed = true
-})
-
-// ---------- idle animation ----------
-const clock = new THREE.Clock()
-const rand = (a, b) => a + Math.random() * (b - a)
-
-function makeTimer(min, max) {
-  return { t: rand(min, max), min, max }
+let activeView='default'
+const views={
+  default:{target:[.06,.81,.04],offset:[1.42,.55,3.6]},
+  face:{target:[0,1.27,.20],offset:[.62,.16,1.86]},
+  side:{target:[0,.81,.02],offset:[3.95,.30,.12]},
+  front:{target:[.05,.83,.08],offset:[0,.20,3.7]}
 }
-function tick(timer, dt) {
-  timer.t -= dt
-  if (timer.t <= 0) {
-    timer.t = rand(timer.min, timer.max)
-    return true
-  }
-  return false
+function fitView(name) {
+  const view=views[name]||views.default
+  const factor=Math.max(1,(name==='face'?.66:.68)/camera.aspect)
+  controls.target.set(...view.target)
+  camera.position.set(...view.offset).multiplyScalar(factor).add(controls.target)
+  controls.update()
 }
+window.setView=name=>{
+  activeView=views[name]?name:'default';controls.autoRotate=false
+  document.getElementById('rotate-button')?.setAttribute('aria-pressed','false')
+  fitView(activeView)
+  document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===activeView)))
+}
+fitView(activeView)
+controls.addEventListener('start',()=>{controls.autoRotate=false;document.getElementById('rotate-button')?.setAttribute('aria-pressed','false')})
+window.toggleRotate=()=>{
+  controls.autoRotate=!controls.autoRotate
+  document.getElementById('rotate-button').setAttribute('aria-pressed',String(controls.autoRotate))
+}
+let paused=reducedMotion.matches
+window.toggleMotion=()=>{
+  paused=!paused
+  const button=document.getElementById('motion-button')
+  button.textContent=paused?'Play motion':'Pause motion';button.setAttribute('aria-pressed',String(paused))
+  if(paused) { for(const eye of rig.eyes) eye.scale.y=1; blinkTime=-1 }
+}
+if(paused) {document.getElementById('motion-button').textContent='Play motion';document.getElementById('motion-button').setAttribute('aria-pressed','true')}
 
-const breathT = { v: 0 }
-const look = { yaw: 0, pitch: 0, tyaw: 0, tpitch: 0 }
-const lookTimer = makeTimer(2.5, 5)
-const ears = rig.ears.map((e) => ({ ...e, timer: makeTimer(2, 7), env: 0 }))
-const blink = { timer: makeTimer(2.5, 6.5), p: 1 } // p=progress, >=1 means open
-const tail = { level: 0.25, target: 0.25, timer: makeTimer(5, 9) }
-
-function updateIdle(dt, t) {
-  // breathing
-  breathT.v += dt
-  const br = Math.sin(breathT.v * 2.1)
-  rig.chest.scale.set(0.44 * (1 + 0.018 * br), 0.42 * (1 + 0.03 * br), 0.4 * (1 + 0.02 * br))
-  rig.body.scale.set(0.5 * (1 + 0.008 * br), 0.5 * (1 + 0.012 * br), 0.92)
-  puppy.position.y = Math.sin(breathT.v * 2.1) * 0.004
-
-  // look around (smoothed targets) + gentle sway
-  if (tick(lookTimer, dt)) {
-    look.tyaw = rand(-0.38, 0.38)
-    look.tpitch = rand(-0.1, 0.14)
+const random=seededRandom(718), randomRange=(a,b)=>a+(b-a)*random()
+const look={yaw:0,pitch:0,roll:0,targetYaw:0,targetPitch:0,targetRoll:0,wait:3}
+const pointer={x:0,y:0,last:-100}
+let elapsed=0,petTime=0,blinkWait=2.8,blinkTime=-1,tailPhase=0,tailLevel=.25,tailWait=2
+const earState=rig.ears.map(e=>({...e,wait:randomRange(3,7),phase:-1}))
+canvas.addEventListener('pointermove',e=>{
+  if(e.pointerType==='mouse' && e.buttons===0){pointer.x=e.clientX/innerWidth*2-1;pointer.y=e.clientY/innerHeight*2-1;pointer.last=elapsed}
+})
+canvas.addEventListener('pointerleave',()=>{pointer.last=-100})
+window.petBear=()=>{if(!paused){petTime=2.4;tailLevel=.9;look.targetRoll=-.065}}
+const raycaster=new THREE.Raycaster(), mouse=new THREE.Vector2()
+let down=null
+canvas.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY}})
+canvas.addEventListener('pointerup',e=>{
+  if(!down||Math.hypot(e.clientX-down.x,e.clientY-down.y)>6) return
+  mouse.set(e.clientX/innerWidth*2-1,1-e.clientY/innerHeight*2)
+  raycaster.setFromCamera(mouse,camera)
+  if(raycaster.intersectObject(puppy,true).length) window.petBear()
+  down=null
+})
+function animate(dt){
+  elapsed+=dt
+  const t=elapsed, breath=Math.sin(t*2.5)
+  rig.breath.value=breath
+  look.wait-=dt
+  if(look.wait<0){
+    look.wait=randomRange(2.8,5.4);look.targetYaw=randomRange(-.20,.20)
+    look.targetPitch=randomRange(-.065,.065);look.targetRoll=random()<.25?randomRange(-.055,.055):0
   }
-  const k = 1 - Math.pow(0.002, dt)
-  look.yaw += (look.tyaw - look.yaw) * k
-  look.pitch += (look.tpitch - look.pitch) * k
-  rig.head.rotation.y = look.yaw + Math.sin(t * 0.45) * 0.05
-  rig.head.rotation.x = look.pitch + Math.sin(t * 0.33) * 0.025
-  rig.head.rotation.z = Math.sin(t * 0.27) * 0.02
-
-  // ear twitches
-  for (const ear of ears) {
-    if (tick(ear.timer, dt)) ear.env = 1
-    if (ear.env > 0) {
-      ear.env -= dt * 3
-      const w = Math.max(0, ear.env) * Math.max(0, ear.env)
-      ear.group.rotation.z = -0.5 * ear.side + Math.sin((1 - ear.env) * 24) * 0.16 * w
-      ear.group.rotation.x = -0.12 + Math.cos((1 - ear.env) * 20) * 0.08 * w
+  const attention=Math.max(0,1-(t-pointer.last)/2.5)*.24
+  const k=1-Math.exp(-dt*3)
+  look.yaw+=(look.targetYaw*(1-attention)+pointer.x*.3*attention-look.yaw)*k
+  look.pitch+=(look.targetPitch+pointer.y*.16*attention-look.pitch)*k
+  look.roll+=(look.targetRoll-look.roll)*(1-Math.exp(-dt*2))
+  rig.head.rotation.set(look.pitch+breath*.003,look.yaw,look.roll)
+  petTime=Math.max(0,petTime-dt)
+  blinkWait-=dt
+  if(blinkWait<0&&blinkTime<0){blinkTime=0;blinkWait=randomRange(2.6,6.2)}
+  if(blinkTime>=0){
+    blinkTime+=dt
+    const closure=Math.sin(Math.min(1,blinkTime/.19)*Math.PI)
+    for(const eye of rig.eyes) eye.scale.y=Math.max(.03,1-closure)
+    if(blinkTime>=.19){blinkTime=-1;for(const eye of rig.eyes) eye.scale.y=1}
+  }
+  for(const ear of earState){
+    ear.wait-=dt
+    if(ear.wait<0){ear.wait=randomRange(4,9);ear.phase=0}
+    if(ear.phase>=0){ear.phase+=dt;const envelope=Math.sin(Math.min(1,ear.phase/.38)*Math.PI)
+      ear.group.rotation.z=ear.baseZ+envelope*.065;ear.group.rotation.x=ear.baseX+envelope*.05
+      if(ear.phase>=.38)ear.phase=-1
     }
   }
-
-  // blinking
-  if (blink.p >= 1 && tick(blink.timer, dt)) blink.p = 0
-  if (blink.p < 1) {
-    blink.p += dt / 0.16
-    const closeAmt = Math.sin(Math.min(1, blink.p) * Math.PI)
-    for (const eye of rig.eyes) eye.scale.y = Math.max(0.06, 1 - closeAmt)
-  }
-
-  // tail wag with excitement bursts
-  if (tick(tail.timer, dt)) tail.target = rand(0.7, 1)
-  tail.level += (tail.target - tail.level) * (1 - Math.pow(0.15, dt))
-  if (tail.level > 0.6) tail.timer.t -= dt * 2 // bursts decay faster
-  else if (tail.level < 0.35 && tail.target > 0.5) tail.target = rand(0.15, 0.3)
-  const wagSpeed = 3.2 + tail.level * 3.5
-  rig.tail.rotation.y = Math.sin(t * wagSpeed) * (0.16 + 0.3 * tail.level)
-  rig.tail.rotation.x = Math.sin(t * wagSpeed * 0.5) * 0.05
-
-  // panting tongue
-  rig.tongue.rotation.x = 0.28 + Math.sin(t * 6.8) * 0.05
-  rig.tongue.rotation.z = Math.sin(t * 1.9) * 0.07
-  const ps = 1 + Math.sin(t * 6.8) * 0.035
-  rig.tongue.scale.set(ps, 1 + Math.sin(t * 6.8 + 0.6) * 0.03, ps)
-
-  // collar reacts subtly to breathing
-  rig.collar.rotation.z = Math.sin(t * 2.1) * 0.015
+  tailWait-=dt
+  if(tailWait<0){tailWait=randomRange(2,4);tailLevel=randomRange(.1,.45)}
+  const wag=petTime>0?.72:tailLevel
+  tailPhase+=dt*(6+wag*4)
+  rig.tail.rotation.y=Math.sin(tailPhase)*wag
+  rig.tail.rotation.z=Math.sin(tailPhase+.6)*wag*.20
+  const pant=Math.sin(t*(petTime>0?8.5:7))
+  rig.jaw.rotation.x=.10+pant*.014
+  rig.tongue.rotation.x=.035+pant*.018
+  rig.pendant.rotation.x=Math.sin(t*2.5+.7)*.025
+  rig.pendant.rotation.z=-look.yaw*.07+Math.sin(t*2.5)*.009
 }
-
-// ---------- adaptive resolution ----------
-let frameAcc = 0
-let frameCount = 0
-let curDpr = renderer.getPixelRatio()
-function adaptResolution(dt) {
-  frameAcc += dt
-  frameCount++
-  if (frameCount < 90) return
-  const avg = frameAcc / frameCount
-  frameAcc = 0
-  frameCount = 0
-  if (avg > 0.034 && curDpr > 1) {
-    curDpr = Math.max(1, curDpr - 0.25)
-    renderer.setPixelRatio(curDpr)
-  } else if (avg < 0.02 && curDpr < Math.min(window.devicePixelRatio, maxDpr)) {
-    curDpr = Math.min(curDpr + 0.25, Math.min(window.devicePixelRatio, maxDpr))
-    renderer.setPixelRatio(curDpr)
-  }
-}
-
-// ---------- resize ----------
-function onResize() {
-  const w = window.innerWidth
-  const h = window.innerHeight
-  camera.aspect = w / h
-  camera.updateProjectionMatrix()
-  // keep the puppy framed after orientation changes if user hasn't zoomed
-  const fit = fitDistance()
-  if (!userZoomed && camera.position.distanceTo(controls.target) < 8) {
-    camera.position.setLength(fit)
-  }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDpr))
-  curDpr = renderer.getPixelRatio()
-  renderer.setSize(w, h)
-}
-window.addEventListener('resize', onResize)
-window.visualViewport?.addEventListener('resize', onResize)
-
-// ---------- loop ----------
-renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 0.05)
-  const t = clock.elapsedTime
-  updateIdle(dt, t)
-  controls.update()
-  adaptResolution(dt)
-  renderer.render(scene, camera)
+const clock=new THREE.Clock()
+let frame=0, measurementStart=0
+renderer.setAnimationLoop(()=>{
+  const dt=Math.min(clock.getDelta(),.05)
+  if(!paused&&!document.hidden)animate(dt)
+  controls.update();renderer.render(scene,camera)
+  if(++frame===3){canvas.dataset.ready='true';document.getElementById('veil')?.classList.add('hide');measurementStart=performance.now()}
+  if(frame===123 && import.meta.env.DEV) console.info('Bear render check '+JSON.stringify({fps:Math.round(120000/(performance.now()-measurementStart)),triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls}))
 })
-
-window.__controls = controls
-window.__camera = camera
-
-// fade out loading veil once first frame is up
-requestAnimationFrame(() => requestAnimationFrame(() => {
-  document.getElementById('veil')?.classList.add('hide')
-}))
-setTimeout(() => document.getElementById('hint')?.classList.add('fade'), 6000)
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()
+  renderer.setSize(innerWidth,innerHeight);fitView(activeView)
+})
+setTimeout(()=>document.getElementById('hint')?.classList.add('fade'),8000)
