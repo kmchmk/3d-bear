@@ -1,61 +1,57 @@
 # Bear · 3D portrait
 
-An interactive Three.js study of Bear, using the supplied photographs and video as
-anatomy, coat, and movement references. This is a procedural model, not a scanned
-or photogrammetric reconstruction; photographic identity is still approximate.
+An interactive puppy built with Three.js and Vite. The head and body are sculpted
+and optimized offline in Blender, using the root photographs and shared Beary
+album as visual references. The resemblance remains an artistic reconstruction,
+not a photographic scan.
 
-## Run
+## Run and deploy
 
 ```sh
 npm install
 npm run dev
+npm run build
+npm run preview
 ```
 
-`npm run build` generates the Vite production bundle in `dist`.
-`npm run preview` serves that bundle locally.
+Vercel configuration is included: Vite framework, `npm run build`, output `dist`.
+Blender and the reference media are not required on Vercel. The geometry-only
+`src/sculpted-meshes.json` export is part of the application source. Vite splits
+the model into a separate chunk so the loading screen can paint first.
 
-## Rendering and motion
+## Model and rendering
 
-- A continuous implicit body surface joins the chest, pelvis, neck, and forelegs.
-- A lofted skull continues into the nasal bridge and muzzle, with a separate jaw.
-- Area-sampled, tapered hair geometry replaces the previous layered fur masks.
-  The muzzle has short fur; cheeks, chest, and tail have longer grooming.
-- Model-space facial markings, gray-green irises with planar UVs, textured nose
-  leather, cupped ears, a flattened tongue, and the blue tag / burgundy bell.
-- Chest breathing deforms only the upper body, leaving the paws planted.
-  Head turns, blinks, small ear movements, panting, and intermittent tail wags
-  are independently timed. Petting briefly increases the tail wag.
-- Neutral studio lighting, color-managed standard materials, and filtered shadows.
-- Orbit, zoom, four view presets, motion pause, and an explicit turntable control.
-  Reduced-motion preferences pause the character initially.
-- A lower fiber count and pixel ratio are used on small or touch screens.
+- Smooth anatomical body and head surfaces with carved orbital hollows.
+- Separate corneas, fur-covered eyelids, muzzle pads, jaw, ears, and tongue.
+- Tapered groomed fibers with varied lengths, clumps, guard hairs, and sheen.
+- Cream bib and socks, chocolate muzzle, gray-green irises, and collar accessories.
+- Planted paws, local chest breathing, eyelid closure, ear twitches, and tail motion.
+- Orbit/zoom, four camera views, motion pause, and optional turntable.
+- Reduced-motion preferences pause the character initially.
+- Lower fur density and pixel ratio on small/touch devices; adaptive resolution
+  reduces GPU load if rendering falls behind.
 
-## References
+## Offline sculpt workflow
 
-- `IMG_0391.JPG`: seated proportions, muzzle profile, ears, paws, chest, and tag.
-- `IMG_0470.JPG`: facial mask, eye color, nose, tongue, and coat distribution.
-- `IMG_9934.heic`: indoor body and tail proportions.
-- `IMG_9934.mov` and `bear_video.mp4`: small head turns, panting, planted paws,
-  and tail motion.
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python scripts/sculpt_bear.py
+```
 
-The original files are preserved as local modeling references. All media files
-are covered by case-insensitive Git ignore patterns. Reference media is blocked
-by the development server, and public-directory copying is disabled for builds.
-The website renders only the procedural 3D model and generated textures.
+`scripts/implicit_surface.py` creates smooth anatomical volumes. Blender cleans,
+optimizes, and exports them through `scripts/sculpt_bear.py`. An editable local
+copy is saved to `.review/bear-sculpt.blend`. Regeneration replaces the geometry
+JSON; rebuilding the website does not regenerate the sculpt.
 
-## Source
+## Reference privacy
 
-- `src/anatomy.js`: smooth anatomical volumes and surface extraction.
-- `src/puppy.js`: head, body assembly, facial details, coat markings, and rig.
-- `src/fur.js`: deterministic area sampling and tapered, groomed fibers.
-- `src/textures.js`: iris and leather microtexture generation.
-- `src/main.js`: scene, lighting, camera, animation, and interaction.
-- `index.html`: animation and camera controls.
+Root JPG/HEIC/MOV files and the shared album are modeling references only. No real
+photos or videos are displayed, loaded, or copied into the production website.
+Image/video/audio formats and Blender intermediates are ignored, including
+uppercase extensions. Vite public-directory copying is disabled and reference
+media is denied by the development server.
 
-## Validation
+## Validation scope
 
-The production build and live browser rendering were checked. Desktop and
-390 × 844 phone-sized layouts, face/profile/front views, and pause/play
-were exercised. Body surface positions and normals were
-checked for finite values and outward triangle winding. Actual phone hardware
-performance has not been measured.
+Production build, mesh data, browser rendering, responsive framing, and animation
+controls are checked locally. Phone-sized browser checks do not constitute real
+phone GPU testing. Deployment to a live Vercel project is a separate step.

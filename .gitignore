@@ -48,3 +48,12 @@ dist/
 
 # Reference assets stay local and are never published.
 public/photos/
+
+# Offline Blender source and intermediate model exports.
+*.[bB][lL][eE][nN][dD]
+*.[bB][lL][eE][nN][dD]1
+*.[gG][lL][bB]
+*.[gG][lL][tT][fF]
+*.[fF][bB][xX]
+__pycache__/
+.DS_Store

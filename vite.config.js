@@ -19,7 +19,7 @@ export default defineConfig({
     },
   },
   build: {
-    target: 'es2019',
+    target: 'es2022',
     chunkSizeWarningLimit: 900,
   },
 })

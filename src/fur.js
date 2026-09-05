@@ -51,7 +51,7 @@ export function makeFurPart(geometry, {
     const scale = lengthAt(p, n)
     if (scale <= 0) continue
     colorAt(p, c)
-    const variation = 0.78 + random() * 0.40
+    const variation = 0.84 + random() * 0.32
     c.multiplyScalar(variation)
     if (typeof groom === 'function') groom(p, n, tangent)
     else tangent.set(...groom)
@@ -60,20 +60,22 @@ export function makeFurPart(geometry, {
     side.crossVectors(n, tangent)
     if (side.lengthSq() < 0.01) side.crossVectors(n, new THREE.Vector3(1, 0, 0))
     side.normalize()
-    const len = length * scale * (0.55 + random() * 0.90)
+    const clump = Math.sin(p.x*137 + Math.sin(p.y*103)) * Math.sin(p.z*111 + p.y*83)
+    const guard = random() > .88
+    const len = length * scale * (.60 + random() * .65) * (guard ? 1.5 : 1) * (1 + clump*.24)
     const w = width * (0.60 + random() * 0.65)
-    const curl = (random() - 0.5) * len * 0.23
+    const curl = (clump*.65 + (random()-.5)*.7) * len * .38
     const offset = positions.length / 3
     for (let j = 0; j <= segments; j++) {
       const t = j / segments
-      point.copy(p).addScaledVector(n, len * t * (0.66 - 0.27 * t))
+      point.copy(p).addScaledVector(n, len * t * (0.65 - 0.28 * t))
         .addScaledVector(tangent, len * t * (0.38 + t * 0.50))
         .addScaledVector(side, Math.sin(t * Math.PI * 0.8) * curl)
       const taper = w * (1 - t * 0.94) * 0.5
       for (const s of [-1, 1]) {
         positions.push(point.x + side.x * taper * s, point.y + side.y * taper * s, point.z + side.z * taper * s)
         normals.push(n.x, n.y, n.z)
-        const brightness = 0.78 + 0.27 * t
+        const brightness = .86 + .20 * t
         colors.push(c.r * brightness, c.g * brightness, c.b * brightness)
       }
       if (j < segments) {
@@ -88,8 +90,8 @@ export function makeFurPart(geometry, {
   fibers.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
   fibers.setIndex(indices)
   fibers.computeBoundingSphere()
-  const hair = new THREE.Mesh(fibers, new THREE.MeshStandardMaterial({
-    vertexColors: true, roughness: 0.94, side: THREE.DoubleSide,
+  const hair = new THREE.Mesh(fibers, new THREE.MeshPhysicalMaterial({
+    vertexColors: true, roughness: .96, sheen: .8, sheenRoughness: .65, sheenColor: new THREE.Color(0x9b8164), side: THREE.DoubleSide,
   }))
   hair.receiveShadow = true
   // The closed undercoat casts the shadow; fine fibers soften the silhouette.

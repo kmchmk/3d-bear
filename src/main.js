@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
-import { buildPuppy } from './puppy.js'
+// Load the sculpt separately so the page can paint its loading state first.
+const loadPuppy = () => import('./puppy.js')
 import { seededRandom } from './fur.js'
 
 const mobile = matchMedia('(pointer: coarse)').matches || innerWidth < 700
@@ -45,18 +46,27 @@ const controls=new OrbitControls(camera,canvas)
 controls.enableDamping=true;controls.dampingFactor=.085;controls.enablePan=false
 controls.minDistance=.85;controls.maxDistance=7;controls.minPolarAngle=.25;controls.maxPolarAngle=1.55
 controls.autoRotate=false;controls.autoRotateSpeed=.45
-const {group:puppy,rig}=buildPuppy({quality:mobile?.48:1})
+let model
+try {
+  const {buildPuppy}=await loadPuppy()
+  model=buildPuppy({quality:mobile?.36:.85})
+} catch(error) {
+  document.querySelector('.veil-text').textContent='Bear could not load. Please reload the page.'
+  console.error('Puppy model failed to load',error)
+  throw error
+}
+const {group:puppy,rig}=model
 scene.add(puppy)
 let activeView='default'
 const views={
-  default:{target:[.06,.81,.04],offset:[1.42,.55,3.6]},
-  face:{target:[0,1.27,.20],offset:[.62,.16,1.86]},
-  side:{target:[0,.81,.02],offset:[3.95,.30,.12]},
-  front:{target:[.05,.83,.08],offset:[0,.20,3.7]}
+  default:{target:[.025,.73,.025],offset:[1.22,.40,3.25]},
+  face:{target:[0,1.08,.16],offset:[.62,.14,1.75]},
+  side:{target:[0,.74,.02],offset:[3.7,.25,.12]},
+  front:{target:[.025,.74,.06],offset:[0,.18,3.5]}
 }
 function fitView(name) {
   const view=views[name]||views.default
-  const factor=Math.max(1,(name==='face'?.66:.68)/camera.aspect)
+  const factor=Math.max(1,(name==='face'?.66:.78)/camera.aspect)
   controls.target.set(...view.target)
   camera.position.set(...view.offset).multiplyScalar(factor).add(controls.target)
   controls.update()
@@ -78,7 +88,7 @@ window.toggleMotion=()=>{
   paused=!paused
   const button=document.getElementById('motion-button')
   button.textContent=paused?'Play motion':'Pause motion';button.setAttribute('aria-pressed',String(paused))
-  if(paused) { for(const eye of rig.eyes) eye.scale.y=1; blinkTime=-1 }
+  if(paused) { rig.setBlink(0); blinkTime=-1 }
 }
 if(paused) {document.getElementById('motion-button').textContent='Play motion';document.getElementById('motion-button').setAttribute('aria-pressed','true')}
 
@@ -123,8 +133,8 @@ function animate(dt){
   if(blinkTime>=0){
     blinkTime+=dt
     const closure=Math.sin(Math.min(1,blinkTime/.19)*Math.PI)
-    for(const eye of rig.eyes) eye.scale.y=Math.max(.03,1-closure)
-    if(blinkTime>=.19){blinkTime=-1;for(const eye of rig.eyes) eye.scale.y=1}
+    rig.setBlink(closure)
+    if(blinkTime>=.19){blinkTime=-1;rig.setBlink(0)}
   }
   for(const ear of earState){
     ear.wait-=dt
@@ -147,11 +157,21 @@ function animate(dt){
   rig.pendant.rotation.z=-look.yaw*.07+Math.sin(t*2.5)*.009
 }
 const clock=new THREE.Clock()
-let frame=0, measurementStart=0
+let frame=0, measurementStart=0, performanceFrames=0, frameTime=0
 renderer.setAnimationLoop(()=>{
   const dt=Math.min(clock.getDelta(),.05)
   if(!paused&&!document.hidden)animate(dt)
   controls.update();renderer.render(scene,camera)
+  if(!document.hidden && frame>3){
+    frameTime+=dt;performanceFrames++
+    if(performanceFrames===180){
+      if(frameTime>6 && renderer.getPixelRatio()>1){
+        renderer.setPixelRatio(Math.max(1,renderer.getPixelRatio()*.8))
+        renderer.setSize(innerWidth,innerHeight)
+      }
+      performanceFrames=0;frameTime=0
+    }
+  }
   if(++frame===3){canvas.dataset.ready='true';document.getElementById('veil')?.classList.add('hide');measurementStart=performance.now()}
   if(frame===123 && import.meta.env.DEV) console.info('Bear render check '+JSON.stringify({fps:Math.round(120000/(performance.now()-measurementStart)),triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls}))
 })
