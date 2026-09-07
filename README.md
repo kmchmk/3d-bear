@@ -24,7 +24,7 @@ the model into a separate chunk so the loading screen can paint first.
 - Smooth anatomical body and head surfaces with carved orbital hollows.
 - Separate corneas, fur-covered eyelids, muzzle pads, jaw, ears, and tongue.
 - Tapered groomed fibers with varied lengths, clumps, guard hairs, and sheen.
-- Cream bib and socks, chocolate muzzle, gray-green irises, and collar accessories.
+- Cream bib and socks, chocolate muzzle, hazel irises, and collar accessories.
 - Planted paws, local chest breathing, eyelid closure, ear twitches, and tail motion.
 - Orbit/zoom, four camera views, motion pause, and optional turntable.
 - Reduced-motion preferences pause the character initially.

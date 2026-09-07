@@ -1,5 +1,16 @@
 import * as THREE from 'three'
-import { seededRandom } from './fur.js'
+
+// Kept local so fur can also consume the procedural strand mask without a
+// module cycle. The texture seeds are deliberately fixed: a coat should not
+// shimmer or change pattern as parts are rebuilt.
+function seededRandom(seed = 173) {
+  return () => {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed)
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t
+    return ((t ^ t >>> 14) >>> 0) / 4294967296
+  }
+}
 
 function texture(size, draw, color = true) {
   const canvas = document.createElement('canvas')
@@ -39,3 +50,29 @@ export const NOSE_BUMP = texture(256, (ctx, size, random) => {
 }, false)
 NOSE_BUMP.wrapS = NOSE_BUMP.wrapT = THREE.RepeatWrapping
 NOSE_BUMP.repeat.set(1, 1)
+
+// Each generated ribbon receives this mask in its own UV space. Its soft,
+// uneven edge breaks the hard card silhouette while the opaque core still
+// writes depth correctly in a dense coat.
+export const FUR_STRAND_ALPHA = texture(128, (ctx, size) => {
+  const image = ctx.createImageData(size, size)
+  for (let y = 0; y < size; y++) {
+    const v = y / (size - 1)
+    for (let x = 0; x < size; x++) {
+      const u = x / (size - 1)
+      const edge = Math.abs(u * 2 - 1)
+      const shaft = Math.max(0, 1 - Math.pow(edge, 2.35))
+      // Round the root very slightly and dissolve the last third into a tip.
+      const tip = 1 - Math.pow(Math.max(0, (v - .58) / .42), 1.55)
+      const root = .82 + .18 * Math.sin(v * Math.PI)
+      const value = Math.round(255 * shaft * tip * root)
+      const i = (y * size + x) * 4
+      image.data[i] = image.data[i + 1] = image.data[i + 2] = value
+      image.data[i + 3] = 255
+    }
+  }
+  ctx.putImageData(image, 0, 0)
+}, false)
+FUR_STRAND_ALPHA.wrapS = FUR_STRAND_ALPHA.wrapT = THREE.ClampToEdgeWrapping
+FUR_STRAND_ALPHA.magFilter = THREE.LinearFilter
+FUR_STRAND_ALPHA.minFilter = THREE.LinearMipmapLinearFilter

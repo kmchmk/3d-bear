@@ -12,36 +12,52 @@ bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=Fal
 import sys
 sys.path.insert(0,str(ROOT/'scripts'))
 from implicit_surface import smooth_anatomy
+# A puppy skull is a shallow wedge: a broad brain case and zygomatic arches
+# narrow through the maxilla to a small nasal pad.  Keeping the masses distinct
+# also gives the brow, stop, and jaw visible planes beneath the coat.
 head_volumes=[
- (0,.02,-.045,.231,.24,.203),
- (0,-.082,-.079,.182,.15,.167),
- (0,-.035,.144,.116,.113,.174),
- (0,-.092,.259,.121,.073,.133),
- (0,-.086,.352,.077,.046,.066),
+ (0,.032,-.060,.176,.181,.154),       # compact cranial vault
+ (0,-.010,.050,.156,.145,.169),       # frontal wedge / short stop
+ (0,-.045,.157,.101,.097,.151,.10,0,0), # bridge and maxilla
+ (0,-.078,.270,.080,.066,.116,.08,0,0), # tapered muzzle base
+ (0,-.084,.354,.057,.044,.064,.04,0,0), # incisive end
+ (0,-.139,.190,.085,.047,.128),       # slim mandible and chin plane
 ]
 for sign in [-1,1]:
  head_volumes += [
-  (sign*.146,-.072,.004,.113,.126,.154),
-  (sign*.050,-.11,.30,.072,.049,.078),
-  (sign*.137,.10,.115,.071,.043,.065),
+  (sign*.105,-.048,.034,.092,.107,.137), # cheek / zygomatic arch
+  (sign*.049,-.103,.267,.051,.046,.088), # paired jowls
+  (sign*.102,.083,.088,.057,.040,.073),  # brow ridge
  ]
-head=smooth_anatomy('Head',head_volumes,[[-.32,-.27,-.29],[.32,.30,.44]],.005,.085,
- sockets=[(sign*.149,.064,.184,.046,.032,.047) for sign in [-1,1]])
+head=smooth_anatomy('Head',head_volumes,[[-.28,-.245,-.25],[.28,.265,.415]],.0047,.042,
+ sockets=[(sign*.103,.029,.159,.039,.027,.043,.0,sign*.10,0) for sign in [-1,1]])
+
+# Low recumbent body.  The thorax is deeper than the abdomen, the pelvis is
+# narrower than the ribs, and each limb follows a sloped shoulder/elbow axis.
 body_volumes=[
- (0,.459,-.155,.258,.339,.297),
- (0,.693,.008,.224,.25,.202),
- (0,.865,.019,.163,.190,.165),
- (0,.568,.109,.163,.222,.146),
+ (0,.275,-.165,.265,.174,.425),       # long rib cage resting low
+ (0,.225,-.440,.216,.139,.245),       # tucked abdomen / pelvis
+ (0,.320,.035,.230,.166,.250,-.18,0,0), # low sternum and chest
+ (0,.505,.105,.151,.176,.160,-.38,0,0), # compact sloping neck
+ (0,.190,-.225,.205,.105,.275),       # belly near the floor
 ]
 for sign in [-1,1]:
  body_volumes += [
-  (sign*.22,.238,-.205,.152,.217,.204),
-  (sign*.278,.104,-.118,.074,.081,.13),
-  (sign*.151,.453,.146,.072,.187,.080),
-  (sign*.156,.250,.192,.054,.195,.057),
-  (sign*.157,.086,.205,.058,.059,.065),
+  (sign*.180,.285,.060,.080,.142,.093,.12,0,sign*.035), # upper foreleg
+  (sign*.155,.145,.170,.067,.082,.100,.12,0,sign*.02),  # planted elbow
+  (sign*.138,.082,.330,.060,.047,.185),                  # forearm on floor
+  (sign*.132,.062,.445,.060,.050,.082),                  # wrist into paw
+  (sign*.228,.315,-.060,.102,.118,.127,.08,0,sign*.06), # scapular muscle
  ]
-body=smooth_anatomy('Body',body_volumes,[[-.44,.015,-.52],[.44,1.09,.34]],.007,.062)
+# Asymmetric recumbent hindquarters: the camera-side thigh opens outward while
+# the far leg remains mostly tucked under the abdomen.
+body_volumes += [
+ (.245,.205,-.355,.157,.140,.222,.10,0,.10),
+ (.310,.090,-.205,.080,.065,.155,-.15,0,.16),
+ (-.178,.190,-.385,.125,.118,.190,.04,0,-.05),
+ (-.125,.075,-.300,.064,.052,.125,-.10,0,-.10),
+]
+body=smooth_anatomy('Body',body_volumes,[[-.43,.005,-.62],[.46,.74,.53]],.0065,.046)
 # Vertex counts are limited before export; fur is generated at runtime per device.
 for ob in [head,body]:
     bpy.context.view_layer.objects.active=ob

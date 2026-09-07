@@ -1,4 +1,10 @@
-"""Smooth implicit anatomical volumes sampled into a Blender mesh."""
+"""Smooth implicit anatomical volumes sampled into a Blender mesh.
+
+Volumes are ellipsoids expressed as ``(center xyz, radius xyz)``.  Three
+optional Euler angles let long bones, the neck, and the muzzle follow their
+real axes instead of making every anatomical mass stand vertically.
+"""
+import math
 import numpy as np
 import bpy
 
@@ -7,8 +13,19 @@ def smooth_anatomy(name, volumes, bounds, step=.007, blend=.055, sockets=()):
     axes=[np.arange(lo[i],hi[i]+step,step) for i in range(3)]
     x,y,z=np.meshgrid(*axes,indexing='ij')
     def ellipsoid(v):
-        cx,cy,cz,rx,ry,rz=v
-        a=(x-cx)/rx;b=(y-cy)/ry;c=(z-cz)/rz
+        cx,cy,cz,rx,ry,rz=v[:6]
+        px=x-cx;py=y-cy;pz=z-cz
+        if len(v) >= 9:
+            ax,ay,az=v[6:9]
+            sx,cx_=math.sin(-ax),math.cos(-ax)
+            sy,cy_=math.sin(-ay),math.cos(-ay)
+            sz,cz_=math.sin(-az),math.cos(-az)
+            # Inverse Z/Y/X Euler rotation into the ellipsoid's local frame.
+            qx=cz_*px-sz*py; qy=sz*px+cz_*py; qz=pz
+            px=cy_*qx+sy*qz; py=qy; pz=-sy*qx+cy_*qz
+            qx=px; qy=cx_*py-sx*pz; qz=sx*py+cx_*pz
+            px=qx;py=qy;pz=qz
+        a=px/rx;b=py/ry;c=pz/rz
         k0=np.sqrt(a*a+b*b+c*c)
         k1=np.sqrt(a*a/rx**2+b*b/ry**2+c*c/rz**2)
         return k0*(k0-1)/np.maximum(k1,1e-8)

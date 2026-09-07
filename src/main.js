@@ -21,17 +21,17 @@ scene.background=new THREE.Color('#e4e0d7')
 scene.fog=new THREE.Fog('#e4e0d7',8,18)
 const room=new RoomEnvironment(), pmrem=new THREE.PMREMGenerator(renderer)
 const environment=pmrem.fromScene(room,.04)
-scene.environment=environment.texture;scene.environmentIntensity=.42
+scene.environment=environment.texture;scene.environmentIntensity=.55
 room.dispose();pmrem.dispose()
-scene.add(new THREE.HemisphereLight('#f5f7ff','#91816b',.90))
-const key=new THREE.DirectionalLight('#fff5e5',2.2)
+scene.add(new THREE.HemisphereLight('#f5f7ff','#91816b',.45))
+const key=new THREE.DirectionalLight('#fff5e5',1.85)
 key.position.set(-3,5,4);key.castShadow=true
 key.shadow.mapSize.set(mobile?1024:2048,mobile?1024:2048)
 Object.assign(key.shadow.camera,{left:-2,right:2,top:2.5,bottom:-1.5,near:.5,far:12})
 key.shadow.bias=-.00015;key.shadow.normalBias=.012;key.shadow.radius=6;key.shadow.blurSamples=8
 scene.add(key)
-const fill=new THREE.DirectionalLight('#dce9ff',.60);fill.position.set(4,2,2);scene.add(fill)
-const rim=new THREE.DirectionalLight('#fff0d6',1.65);rim.position.set(1,3,-3);scene.add(rim)
+const fill=new THREE.DirectionalLight('#dce9ff',.28);fill.position.set(4,2,2);scene.add(fill)
+const rim=new THREE.DirectionalLight('#fff0d6',.85);rim.position.set(1,3,-3);scene.add(rim)
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:'#ddd8cc',roughness:1}))
 floor.rotation.x=-Math.PI/2;floor.position.y=-.009;floor.receiveShadow=true;scene.add(floor)
 const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=256
@@ -58,11 +58,16 @@ try {
 const {group:puppy,rig}=model
 scene.add(puppy)
 let activeView='default'
+const portraitBounds=new THREE.Box3().setFromObject(puppy)
+const portraitCenter=portraitBounds.getCenter(new THREE.Vector3())
+const portraitHeight=portraitBounds.max.y-portraitBounds.min.y
+const fullTarget=[portraitCenter.x,portraitBounds.min.y+portraitHeight*.51,portraitCenter.z]
+const faceTarget=[rig.head.position.x,rig.head.position.y+.045,rig.head.position.z+.09]
 const views={
-  default:{target:[.025,.73,.025],offset:[1.22,.40,3.25]},
-  face:{target:[0,1.08,.16],offset:[.62,.14,1.75]},
-  side:{target:[0,.74,.02],offset:[3.7,.25,.12]},
-  front:{target:[.025,.74,.06],offset:[0,.18,3.5]}
+  default:{target:fullTarget,offset:[1.22,.40,3.25]},
+  face:{target:faceTarget,offset:[.62,.14,1.75]},
+  side:{target:fullTarget,offset:[3.7,.25,.12]},
+  front:{target:fullTarget,offset:[0,.18,3.5]}
 }
 function fitView(name) {
   const view=views[name]||views.default
@@ -159,11 +164,12 @@ function animate(dt){
 const clock=new THREE.Clock()
 let frame=0, measurementStart=0, performanceFrames=0, frameTime=0
 renderer.setAnimationLoop(()=>{
-  const dt=Math.min(clock.getDelta(),.05)
+  const rawDelta=clock.getDelta()
+  const dt=Math.min(rawDelta,.05)
   if(!paused&&!document.hidden)animate(dt)
   controls.update();renderer.render(scene,camera)
   if(!document.hidden && frame>3){
-    frameTime+=dt;performanceFrames++
+    frameTime+=rawDelta;performanceFrames++
     if(performanceFrames===180){
       if(frameTime>6 && renderer.getPixelRatio()>1){
         renderer.setPixelRatio(Math.max(1,renderer.getPixelRatio()*.8))
