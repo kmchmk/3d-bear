@@ -21,17 +21,18 @@ scene.background=new THREE.Color('#e4e0d7')
 scene.fog=new THREE.Fog('#e4e0d7',8,18)
 const room=new RoomEnvironment(), pmrem=new THREE.PMREMGenerator(renderer)
 const environment=pmrem.fromScene(room,.04)
-scene.environment=environment.texture;scene.environmentIntensity=.55
+scene.environment=environment.texture;scene.environmentIntensity=.78
 room.dispose();pmrem.dispose()
-scene.add(new THREE.HemisphereLight('#f5f7ff','#91816b',.45))
-const key=new THREE.DirectionalLight('#fff5e5',1.85)
-key.position.set(-3,5,4);key.castShadow=true
+scene.add(new THREE.HemisphereLight('#f7f4ec','#8a7a66',.55))
+const key=new THREE.DirectionalLight('#fff2df',1.45)
+key.position.set(-2,4,5);key.castShadow=true
 key.shadow.mapSize.set(mobile?1024:2048,mobile?1024:2048)
 Object.assign(key.shadow.camera,{left:-2,right:2,top:2.5,bottom:-1.5,near:.5,far:12})
-key.shadow.bias=-.00015;key.shadow.normalBias=.012;key.shadow.radius=6;key.shadow.blurSamples=8
+key.shadow.bias=-.00015;key.shadow.normalBias=.012;key.shadow.radius=8;key.shadow.blurSamples=12
 scene.add(key)
-const fill=new THREE.DirectionalLight('#dce9ff',.28);fill.position.set(4,2,2);scene.add(fill)
-const rim=new THREE.DirectionalLight('#fff0d6',.85);rim.position.set(1,3,-3);scene.add(rim)
+const fill=new THREE.DirectionalLight('#e8eeff',.48);fill.position.set(3.5,1.6,3);scene.add(fill)
+const rim=new THREE.DirectionalLight('#ffe9c8',.7);rim.position.set(1,3,-3);scene.add(rim)
+const eyeFill=new THREE.DirectionalLight('#fff8ee',.35);eyeFill.position.set(0,1.2,4);scene.add(eyeFill)
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:'#ddd8cc',roughness:1}))
 floor.rotation.x=-Math.PI/2;floor.position.y=-.009;floor.receiveShadow=true;scene.add(floor)
 const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=256
@@ -66,7 +67,7 @@ const fullTarget=[portraitCenter.x,portraitBounds.min.y+portraitHeight*.51,portr
 const faceTarget=[rig.head.position.x,rig.head.position.y+.045,rig.head.position.z+.09]
 const views={
   default:{target:fullTarget,offset:[1.22,.40,3.25]},
-  face:{target:faceTarget,offset:[.62,.14,1.75]},
+  face:{target:faceTarget,offset:[.12,.10,1.80]},
   side:{target:fullTarget,offset:[3.7,.25,.12]},
   front:{target:fullTarget,offset:[0,.18,3.5]}
 }
@@ -157,7 +158,7 @@ function animate(dt){
   rig.tail.rotation.y=Math.sin(tailPhase)*wag
   rig.tail.rotation.z=Math.sin(tailPhase+.6)*wag*.20
   const pant=Math.sin(t*(petTime>0?8.5:7))
-  rig.jaw.rotation.x=.10+pant*.014
+  rig.jaw.rotation.x=.16+pant*.014
   rig.tongue.rotation.x=.035+pant*.018
   rig.pendant.rotation.x=Math.sin(t*2.5+.7)*.025
   rig.pendant.rotation.z=-look.yaw*.07+Math.sin(t*2.5)*.009

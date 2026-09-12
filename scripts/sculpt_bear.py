@@ -16,46 +16,47 @@ from implicit_surface import smooth_anatomy
 # narrow through the maxilla to a small nasal pad.  Keeping the masses distinct
 # also gives the brow, stop, and jaw visible planes beneath the coat.
 head_volumes=[
- (0,.038,-.067,.182,.176,.158),       # broad but shallow cranial vault
-  (0,-.002,.052,.164,.139,.181),        # forehead falling into a short stop
- (0,-.041,.165,.105,.087,.176,.10,0,0), # long, tapering nasal bridge
- (0,-.076,.286,.083,.064,.128,.08,0,0), # muzzle root -- narrower than the skull
- (0,-.083,.373,.060,.044,.070,.04,0,0), # small incisive/nasal end
- (0,-.146,.220,.091,.042,.139),       # clear lower-jaw and chin plane
+ (0,.038,-.067,.178,.172,.155),       # broad but shallow cranial vault
+  (0,-.002,.052,.160,.135,.178),        # forehead falling into a short stop
+ (0,-.041,.165,.108,.087,.176,.10,0,0), # long, tapering nasal bridge
+ (0,-.074,.286,.088,.066,.132,.08,0,0), # muzzle root -- fuller chops
+ (0,-.081,.373,.064,.047,.074,.04,0,0), # small incisive/nasal end
+ (0,-.142,.220,.096,.045,.142),       # clear lower-jaw and chin plane
 ]
 for sign in [-1,1]:
  head_volumes += [
-   (sign*.118,-.049,.040,.100,.101,.145), # projected cheek / zygomatic arch
-  (sign*.052,-.107,.281,.052,.041,.096), # paired jowls, leaving a mouth crease
-   (sign*.103,.072,.088,.055,.030,.070),  # flatter brow, no horn-like knob
+   (sign*.106,-.049,.040,.088,.099,.143), # projected cheek / zygomatic arch
+  (sign*.058,-.103,.281,.060,.047,.104), # fuller paired jowls, leaving a mouth crease
+   (sign*.100,.070,.088,.052,.030,.068),  # flatter brow, no horn-like knob
  ]
 head=smooth_anatomy('Head',head_volumes,[[-.29,-.245,-.30],[.29,.265,.49]],.0047,.042,
-  sockets=[(sign*.092,.016,.180,.040,.023,.045,.0,sign*.10,0) for sign in [-1,1]])
+  sockets=[(sign*.084,.010,.188,.036,.026,.040,.0,sign*.02,0) for sign in [-1,1]])
 
 # Low recumbent body.  The thorax is deeper than the abdomen, the pelvis is
 # narrower than the ribs, and each limb follows a sloped shoulder/elbow axis.
 body_volumes=[
- (0,.285,-.155,.268,.169,.438),       # deep rib cage, long and low to the floor
- (0,.220,-.455,.218,.133,.260),       # tucked waist flowing into the pelvis
+ (0,.295,-.150,.250,.175,.430),       # slimmer rib cage with a level back
+ (0,.295,-.420,.200,.150,.240),       # loin bridging ribs to pelvis topline
+ (0,.235,-.500,.200,.125,.230),       # tucked waist flowing into the pelvis
  (0,.331,.038,.236,.163,.255,-.18,0,0), # sternum tapering down between forelegs
  (0,.505,.100,.153,.174,.164,-.38,0,0), # compact, sloping neck
- (0,.183,-.228,.205,.097,.285),       # narrow belly clearance, not a round barrel
+ (0,.175,-.220,.190,.090,.270),       # tucked belly line, not a round barrel
 ]
 for sign in [-1,1]:
  body_volumes += [
   (sign*.180,.285,.060,.080,.142,.093,.12,0,sign*.035), # upper foreleg
-  (sign*.155,.145,.170,.067,.082,.100,.12,0,sign*.02),  # planted elbow
-  (sign*.138,.082,.330,.060,.047,.185),                  # forearm on floor
-  (sign*.132,.062,.445,.060,.050,.082),                  # wrist into paw
+   (sign*.155,.145,.170,.062,.082,.100,.12,0,sign*.02),  # planted elbow
+   (sign*.138,.082,.330,.054,.047,.185),                  # forearm on floor
+   (sign*.132,.062,.445,.054,.050,.082),                  # wrist into paw
   (sign*.228,.315,-.060,.102,.118,.127,.08,0,sign*.06), # scapular muscle
  ]
-# Asymmetric recumbent hindquarters: the camera-side thigh opens outward while
-# the far leg remains mostly tucked under the abdomen.
+# Folded recumbent hindquarters: each thigh lies flat against the body with
+# the stifle forward, the gaskin folding back, and the foot pointing rearward.
 body_volumes += [
- (.245,.205,-.355,.157,.140,.222,.10,0,.10),
- (.310,.090,-.205,.080,.065,.155,-.15,0,.16),
- (-.178,.190,-.385,.125,.118,.190,.04,0,-.05),
- (-.125,.075,-.300,.064,.052,.125,-.10,0,-.10),
+ (.215,.195,-.360,.125,.135,.250,.10,0,.10),
+ (.265,.085,-.220,.070,.060,.150,-.15,0,.16),
+ (-.170,.185,-.390,.115,.115,.200,.04,0,-.05),
+ (-.120,.070,-.300,.060,.050,.120,-.10,0,-.10),
 ]
 # The pelvis reaches z=-.715 and the blend radius extends past the raw
 # extents, so the sample box keeps a margin on every side; an isosurface at

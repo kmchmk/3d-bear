@@ -27,7 +27,7 @@ export function makeFurPart(geometry, {
   }
   geometry.setAttribute('color', new THREE.BufferAttribute(color, 3))
   const baseMaterial = new THREE.MeshPhysicalMaterial({
-    vertexColors: true, roughness: .88, sheen: .18, sheenRoughness: .88,
+    vertexColors: true, roughness: .94, sheen: .08, sheenRoughness: .92,
   })
   // The undercoat has broad, quiet tonal variation plus a fine fiber grain.
   // It gives the dense core depth without turning the surface into sand.
@@ -46,8 +46,9 @@ export function makeFurPart(geometry, {
       }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float patches = coatNoise(coatPosition * 13.0);
-        float grain = coatNoise(coatPosition * 150.0);
-        float coatValue = .93 + (patches - .5) * .06 + (grain - .5) * .015;
+        float grain = coatNoise(coatPosition * 165.0);
+        float strands = coatNoise(coatPosition * vec3(90.0, 260.0, 90.0));
+        float coatValue = .91 + (patches - .5) * .09 + (grain - .5) * .030 + (strands - .5) * .030;
         diffuseColor.rgb *= coatValue;`)
   }
   const skin = new THREE.Mesh(geometry, baseMaterial)
@@ -61,7 +62,7 @@ export function makeFurPart(geometry, {
   const point = new THREE.Vector3(), curveDirection = new THREE.Vector3(), strandNormal = new THREE.Vector3()
   const tip = new THREE.Color(), strand = new THREE.Color()
   const positions = [], normals = [], colors = [], uvs = [], indices = []
-  const segments = 3
+  const segments = 4
   for (let i = 0; i < count; i++) {
     sampler.sample(p, n)
     const scale = lengthAt(p, n)
@@ -89,9 +90,9 @@ export function makeFurPart(geometry, {
     tangent.addScaledVector(side, cellTwist * .13).normalize()
     side.crossVectors(n, tangent).normalize()
     const guard = random() > .94
-    const len = length * scale * (.73 + clump * .24 + (random() - .5) * .10) * (guard ? 1.32 : 1)
-    const w = width * (.66 + clump * .26)
-    const curl = (cellTwist + (random() - .5) * .18) * len * .09
+    const len = length * scale * (.72 + clump * .26 + (random() - .5) * .12) * (guard ? 1.34 : 1)
+    const w = width * (.62 + clump * .28)
+    const curl = (cellTwist + (random() - .5) * .22) * len * .12
     // Per-fiber frizz breaks ribbon uniformity; tips wander while roots stay put.
     const fzN = (random() - .5) * frizz, fzS = (random() - .5) * frizz * .6
     // Agouti weight: 0 keeps the base color along the whole strand.
@@ -110,9 +111,9 @@ export function makeFurPart(geometry, {
         .addScaledVector(tangent, len * (.64 + .46 * t))
         .addScaledVector(side, Math.PI * Math.cos(t * Math.PI) * curl)
       strandNormal.crossVectors(curveDirection, side).normalize()
-      const taper = w * (1 - t * .90) * .5
-      // Roots sit in soft shadow; tips carry the agouti band when present.
-      const brightness = .84 + .16 * t
+      const taper = w * (1 - t * .93) * .5
+      // Deep root shadow for a dense double-coat read; tips carry agouti band.
+      const brightness = .68 + .32 * t
       const tipMix = tipWeight * Math.pow(t, 1.5)
       strand.copy(c).lerp(tip, tipMix)
       for (const s of [-1, 1]) {
@@ -135,8 +136,8 @@ export function makeFurPart(geometry, {
   fibers.setIndex(indices)
   fibers.computeBoundingSphere()
   const hair = new THREE.Mesh(fibers, new THREE.MeshPhysicalMaterial({
-    vertexColors: true, alphaMap: FUR_STRAND_ALPHA, alphaTest: .12, alphaToCoverage: true,
-    roughness: .72, sheen: .42, sheenRoughness: .72, sheenColor: new THREE.Color(0x9e8a70),
+    vertexColors: true, alphaMap: FUR_STRAND_ALPHA, alphaTest: .13, alphaToCoverage: true,
+    roughness: .86, sheen: .22, sheenRoughness: .82, sheenColor: new THREE.Color(0x8a7a64),
     side: THREE.DoubleSide,
   }))
   hair.receiveShadow = true

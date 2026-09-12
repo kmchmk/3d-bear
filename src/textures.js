@@ -22,22 +22,32 @@ function texture(size, draw, color = true) {
 }
 
 // Planar UVs on a curved iris, not a circular image wrapped around a sphere.
+// Hazel-green canine iris: muted gold-grey mid, dark limbal rim, larger pupil.
 export const IRIS_MAP = texture(512, (ctx, size, random) => {
   const r = size / 2
-  ctx.fillStyle = '#17100b'; ctx.fillRect(0, 0, size, size)
-  const g = ctx.createRadialGradient(r, r, r * 0.26, r, r, r)
-  g.addColorStop(0, '#66513c'); g.addColorStop(0.5, '#796548')
-  g.addColorStop(0.82, '#51412d'); g.addColorStop(1, '#21170f')
+  ctx.fillStyle = '#241c14'; ctx.fillRect(0, 0, size, size)
+  const g = ctx.createRadialGradient(r, r, r * 0.20, r, r, r)
+  g.addColorStop(0, '#97865e'); g.addColorStop(0.34, '#7a7154')
+  g.addColorStop(0.58, '#5b5644'); g.addColorStop(0.82, '#3b3327'); g.addColorStop(1, '#1c1611')
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(r, r, r, 0, Math.PI * 2); ctx.fill()
-  for (let i = 0; i < 1100; i++) {
-    const a = random() * Math.PI * 2, inner = r * (0.28 + random() * 0.26)
-    const outer = r * (0.72 + random() * 0.25)
-    ctx.strokeStyle = random() > 0.5 ? 'rgba(171,138,84,.22)' : 'rgba(31,21,13,.38)'
-    ctx.lineWidth = 0.5 + random() * 1.5
+  // Dense radial fibers: light gold + dark brown + sparse green-gray flecks.
+  for (let i = 0; i < 1700; i++) {
+    const a = random() * Math.PI * 2, inner = r * (0.32 + random() * 0.22)
+    const outer = r * (0.70 + random() * 0.26)
+    const pick = random()
+    ctx.strokeStyle = pick > 0.84 ? 'rgba(150,152,124,.30)' : pick > 0.5 ? 'rgba(175,155,110,.24)' : 'rgba(28,20,12,.42)'
+    ctx.lineWidth = 0.5 + random() * 1.4
     ctx.beginPath(); ctx.moveTo(r + Math.cos(a) * inner, r + Math.sin(a) * inner)
-    ctx.lineTo(r + Math.cos(a + .02) * outer, r + Math.sin(a + .02) * outer); ctx.stroke()
+    ctx.lineTo(r + Math.cos(a + .025) * outer, r + Math.sin(a + .025) * outer); ctx.stroke()
   }
-  ctx.fillStyle = '#090c0b'; ctx.beginPath(); ctx.arc(r, r, r * 0.48, 0, Math.PI * 2); ctx.fill()
+  // Collarette: pale broken ring just outside the pupil.
+  ctx.strokeStyle = 'rgba(195,172,120,.50)'; ctx.lineWidth = r * 0.020
+  ctx.beginPath(); ctx.arc(r, r, r * 0.53, 0, Math.PI * 2); ctx.stroke()
+  // Limbal ring: dark outer rim like the reference eye edge.
+  ctx.strokeStyle = 'rgba(20,14,9,.9)'; ctx.lineWidth = r * 0.060
+  ctx.beginPath(); ctx.arc(r, r, r * 0.955, 0, Math.PI * 2); ctx.stroke()
+  // Large dark pupil so the eye reads dark and round at portrait distance.
+  ctx.fillStyle = '#0a0908'; ctx.beginPath(); ctx.arc(r, r, r * 0.47, 0, Math.PI * 2); ctx.fill()
 })
 
 export const NOSE_BUMP = texture(256, (ctx, size, random) => {
