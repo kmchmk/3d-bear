@@ -57,6 +57,7 @@ try {
 }
 const {group:puppy,rig}=model
 scene.add(puppy)
+window.__bear={rig,controls,camera}
 let activeView='default'
 const portraitBounds=new THREE.Box3().setFromObject(puppy)
 const portraitCenter=portraitBounds.getCenter(new THREE.Vector3())

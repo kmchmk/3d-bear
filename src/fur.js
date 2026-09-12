@@ -15,7 +15,7 @@ export function seededRandom(seed = 173) {
 
 export function makeFurPart(geometry, {
   count = 12000, length = 0.035, width = 0.0008, groom = [0, -1, 0],
-  colorAt, lengthAt = () => 1, seed = 173
+  colorAt, lengthAt = () => 1, tipAt = null, frizz = .12, lift = 1, seed = 173
 } = {}) {
   const group = new THREE.Group()
   const p = new THREE.Vector3(), c = new THREE.Color()
@@ -47,7 +47,7 @@ export function makeFurPart(geometry, {
       .replace('#include <color_fragment>', `#include <color_fragment>
         float patches = coatNoise(coatPosition * 13.0);
         float grain = coatNoise(coatPosition * 150.0);
-        float coatValue = .83 + (patches - .5) * .18 + (grain - .5) * .055;
+        float coatValue = .93 + (patches - .5) * .06 + (grain - .5) * .015;
         diffuseColor.rgb *= coatValue;`)
   }
   const skin = new THREE.Mesh(geometry, baseMaterial)
@@ -58,7 +58,8 @@ export function makeFurPart(geometry, {
   const random = seededRandom(seed)
   const sampler = new MeshSurfaceSampler(skin).setRandomGenerator(random).build()
   const n = new THREE.Vector3(), tangent = new THREE.Vector3(), side = new THREE.Vector3()
-  const point = new THREE.Vector3()
+  const point = new THREE.Vector3(), curveDirection = new THREE.Vector3(), strandNormal = new THREE.Vector3()
+  const tip = new THREE.Color(), strand = new THREE.Color()
   const positions = [], normals = [], colors = [], uvs = [], indices = []
   const segments = 3
   for (let i = 0; i < count; i++) {
@@ -73,41 +74,56 @@ export function makeFurPart(geometry, {
     const cell = Math.sin(cx * 127.1 + cy * 311.7 + cz * 74.7) * 43758.5453
     const clump = cell - Math.floor(cell)
     const cellTwist = Math.sin(cx * 269.5 + cy * 183.3 + cz * 419.2) * .5
-    const variation = .82 + clump * .18 + (random() - .5) * .055
+    const variation = .93 + clump * .07 + (random() - .5) * .02
     c.multiplyScalar(variation)
     if (typeof groom === 'function') groom(p, n, tangent)
     else tangent.set(...groom)
     // Tangential grooming preserves volume without spikes normal to the skin.
-    tangent.addScaledVector(n, -tangent.dot(n)).normalize()
-    side.crossVectors(n, tangent)
-    if (side.lengthSq() < 0.01) side.crossVectors(n, new THREE.Vector3(1, 0, 0))
-    side.normalize()
+    tangent.addScaledVector(n, -tangent.dot(n))
+    if (tangent.lengthSq() < 1e-8) {
+      tangent.set(Math.abs(n.x) < .8 ? 1 : 0, Math.abs(n.x) < .8 ? 0 : 1, 0)
+      tangent.addScaledVector(n, -tangent.dot(n))
+    }
+    tangent.normalize()
+    side.crossVectors(n, tangent).normalize()
     tangent.addScaledVector(side, cellTwist * .13).normalize()
     side.crossVectors(n, tangent).normalize()
     const guard = random() > .94
-    const len = length * scale * (.73 + clump * .24 + (random() - .5) * .10) * (guard ? 1.28 : 1)
+    const len = length * scale * (.73 + clump * .24 + (random() - .5) * .10) * (guard ? 1.32 : 1)
     const w = width * (.66 + clump * .26)
     const curl = (cellTwist + (random() - .5) * .18) * len * .09
+    // Per-fiber frizz breaks ribbon uniformity; tips wander while roots stay put.
+    const fzN = (random() - .5) * frizz, fzS = (random() - .5) * frizz * .6
+    // Agouti weight: 0 keeps the base color along the whole strand.
+    const tipWeight = tipAt ? tipAt(p, tip, guard) : 0
     const offset = positions.length / 3
     for (let j = 0; j <= segments; j++) {
       const t = j / segments
       // Young coats lie close to the skin. A small mid-shaft lift keeps the
       // volume soft while the groom direction, rather than a large normal arc,
       // carries the visible flow.
-      point.copy(p).addScaledVector(n, len * (.12 * t + .14 * Math.sin(t * Math.PI)))
+      point.copy(p).addScaledVector(n, len * lift * (.12 * t + .14 * Math.sin(t * Math.PI)))
         .addScaledVector(tangent, len * t * (.64 + t * .23))
-        .addScaledVector(side, Math.sin(t * Math.PI) * curl)
+        .addScaledVector(side, Math.sin(t * Math.PI) * curl + fzS * len * t * t)
+        .addScaledVector(strandNormal, fzN * len * t * t)
+      curveDirection.copy(n).multiplyScalar(len * (.12 + .14 * Math.PI * Math.cos(t * Math.PI)))
+        .addScaledVector(tangent, len * (.64 + .46 * t))
+        .addScaledVector(side, Math.PI * Math.cos(t * Math.PI) * curl)
+      strandNormal.crossVectors(curveDirection, side).normalize()
       const taper = w * (1 - t * .90) * .5
+      // Roots sit in soft shadow; tips carry the agouti band when present.
+      const brightness = .84 + .16 * t
+      const tipMix = tipWeight * Math.pow(t, 1.5)
+      strand.copy(c).lerp(tip, tipMix)
       for (const s of [-1, 1]) {
         positions.push(point.x + side.x * taper * s, point.y + side.y * taper * s, point.z + side.z * taper * s)
-        normals.push(n.x, n.y, n.z)
-        const brightness = .76 + .18 * t
-        colors.push(c.r * brightness, c.g * brightness, c.b * brightness)
+        normals.push(strandNormal.x, strandNormal.y, strandNormal.z)
+        colors.push(strand.r * brightness, strand.g * brightness, strand.b * brightness)
       }
       uvs.push(0, t, 1, t)
       if (j < segments) {
         const a = offset + j * 2
-        indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
+        indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3)
       }
     }
   }
@@ -119,7 +135,7 @@ export function makeFurPart(geometry, {
   fibers.setIndex(indices)
   fibers.computeBoundingSphere()
   const hair = new THREE.Mesh(fibers, new THREE.MeshPhysicalMaterial({
-    vertexColors: true, alphaMap: FUR_STRAND_ALPHA, alphaTest: .12,
+    vertexColors: true, alphaMap: FUR_STRAND_ALPHA, alphaTest: .12, alphaToCoverage: true,
     roughness: .72, sheen: .42, sheenRoughness: .72, sheenColor: new THREE.Color(0x9e8a70),
     side: THREE.DoubleSide,
   }))

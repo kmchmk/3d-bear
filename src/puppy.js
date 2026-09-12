@@ -8,7 +8,7 @@ if (!meshResponse.ok) throw new Error(`Model download failed: ${meshResponse.sta
 const sculptedMeshes = await meshResponse.json()
 
 const C = Object.fromEntries(Object.entries({
-  gold: '#b77c3f', light: '#d0a06b', dark: '#8b552c', cream: '#e8d5b8',
+  gold: '#ad7439', light: '#d0a06b', dark: '#8b552c', cream: '#e8d5b8',
   white: '#eee4d0', mask: '#49382e', muzzle: '#644330', nose: '#281c19',
   skin: '#ad7974', lip: '#3b2525', tongue: '#cb7380', strap: '#5a5650'
 }).map(([key, value]) => [key, new THREE.Color(value)]))
@@ -48,16 +48,37 @@ export function buildPuppy({ quality = 1 } = {}) {
   }
   // One sculpted surface joins pelvis, rib cage, neck and forelegs.
   const bodySkin = fur(sculpt('body'), {
-    count: 88000, length: .058, width: .00085,
+    count: 88000, length: .058, width: .00085, frizz: .07,
     groom: (p,n,t) => t.set(p.x * .5, -.9, p.y < .45 ? .3 : -.25),
-    lengthAt: p => .42 + smooth(p.y,.35,.68) * .85,
+    lengthAt: p => {
+      const bib = smooth(p.z,.025,.18) * smooth(p.y,.34,.52)
+        * (1 - smooth(Math.abs(p.x),.12,.27) * .72)
+      return .42 + smooth(p.y,.35,.68) * .85 + bib * .9 + smooth(p.y,.45,.62) * .55
+        + smooth(p.y,.22,.5) * (1 - smooth(Math.abs(p.x),.15,.30)) * .4
+    },
     colorAt: (p,c) => {
       const bib = smooth(p.z,.025,.18) * smooth(p.y,.34,.52)
         * (1 - smooth(Math.abs(p.x),.12,.27) * .72)
       c.copy(C.gold).lerp(C.cream,bib*.95)
-      c.lerp(C.white,(1-smooth(p.y,.09,.16))*smooth(p.z,.12,.24))
+      const sockEdge = .09 + .025 * Math.sin(p.z*85+p.y*40) * Math.sin(p.x*75)
+      c.lerp(C.white,(1-smooth(p.y,sockEdge,sockEdge+.07))*smooth(p.z,.12,.24))
       c.lerp(C.dark,smooth(-p.z,.17,.42)*.20)
+    },
+    // Dorsal guard hairs carry darker tips; belly and bib stay pale throughout.
+    tipAt: (p, tip, guard) => {
+      const dorsal = smooth(p.y,.42,.66) * (1 - smooth(p.z,.20,.34)) * (1 - smooth(Math.abs(p.x),.22,.36) * .6)
+      if (guard) { tip.copy(C.light).lerp(C.cream,.5); return dorsal * .35 }
+      tip.copy(C.dark).lerp(C.gold,.30)
+      return dorsal * .8
     }
+  },group)
+  // Sparse long dorsal guard hairs flowing back over the undercoat.
+  fur(sculpt('body'), {
+    count: 7000, length: .080, width: .0006, frizz: .10, lift: .45,
+    groom: (p,n,t) => t.set(p.x * .4, -.35, -.55),
+    lengthAt: p => smooth(p.y,.45,.70) * (1 - smooth(Math.abs(p.x),.20,.35)) * (1 - smooth(p.z,.20,.35)),
+    colorAt: (p,c) => c.copy(C.gold).lerp(C.dark,.25),
+    tipAt: (p,tip) => { tip.copy(C.dark).lerp(C.gold,.45); return .5 }
   },group)
   rig.breath = {value:0}
   for (const part of bodySkin.children) {
@@ -78,7 +99,7 @@ export function buildPuppy({ quality = 1 } = {}) {
     for (let i = 0; i < 4; i++) {
       const x = (i - 1.5) * .025, z = .072 + (i === 1 || i === 2 ? .010 : .004)
       fur(ellipsoid(.017, .018, .031), { count: 170, length: .007, width: .0005, groom: [0, -.15, 1], colorAt: solid(C.white) }, paw, [x, -.002, z])
-      const claw = mesh(new THREE.ConeGeometry(.0026, .008, 8), new THREE.MeshStandardMaterial({color:'#8a7465', roughness:.75}), [x, -.010, z + .027], paw)
+      const claw = mesh(new THREE.ConeGeometry(.0032, .010, 8), new THREE.MeshStandardMaterial({color:'#3a2e28', roughness:.6}), [x, -.010, z + .028], paw)
       claw.rotation.x = Math.PI / 2 + .25
     }
   }
@@ -95,12 +116,14 @@ export function buildPuppy({ quality = 1 } = {}) {
     c.lerp(C.cream,cheek*.79)
     const muzzle=smooth(p.z,.15,.29)
     const bridge=gaussian(p.x,p.y+.015,.135,.20)*smooth(p.z,.05,.15)
-    const socket=gaussian(Math.abs(p.x)-.103,p.y-.029,.075,.060)*smooth(p.z,.05,.14)
+    const socket=gaussian(Math.abs(p.x)-.092,p.y-.016,.075,.060)*smooth(p.z,.05,.14)
     c.lerp(C.mask,Math.max(muzzle*.87,bridge*.90,socket*.97))
-    const tear=gaussian(Math.abs(p.x)-.120,p.y-.012,.039,.020)*smooth(p.z,.05,.14)
-    c.lerp(C.light,tear*.68)
-    const brow=gaussian(Math.abs(p.x)-.103,p.y-.100,.025,.017)*smooth(p.z,.07,.16)
+    const tear=gaussian(Math.abs(p.x)-.108,p.y-.008,.042,.022)*smooth(p.z,.05,.14)
+    c.lerp(C.light,tear*.80)
+    const brow=gaussian(Math.abs(p.x)-.098,p.y-.078,.025,.017)*smooth(p.z,.07,.16)
     c.lerp(C.cream,brow*.30)
+    const browDot=gaussian(Math.abs(p.x)-.086,p.y-.048,.020,.013)*smooth(p.z,.06,.14)
+    c.lerp(C.cream,browDot*.60)
     const chin=(1-smooth(p.y,-.2,-.165))*(1-smooth(p.z,.10,.22))
     c.lerp(C.cream,chin*.62)
   }
@@ -110,10 +133,11 @@ export function buildPuppy({ quality = 1 } = {}) {
   fur(headGeo,{
     count:74000,length:.027,width:.00090,colorAt:headColor,
     lengthAt:p=>{
-      const eye=gaussian(Math.abs(p.x)-.103,p.y-.029,.047,.031)*smooth(p.z,.105,.16)
+      const eye=gaussian(Math.abs(p.x)-.092,p.y-.016,.047,.031)*smooth(p.z,.105,.16)
       if(eye>.22)return .04
       const cheek=smooth(Math.abs(p.x),.14,.24)*(1-smooth(p.y,-.01,.08))
-      return .38+(1-smooth(p.z,.09,.25))*.75+cheek*1.8
+      const crown=smooth(p.y,.08,.18)*(1-smooth(Math.abs(p.x),.05,.12))
+      return .38+(1-smooth(p.z,.09,.25))*.75+cheek*1.8+crown*.9
     },
     groom:(p,n,t)=>{
       const front=smooth(p.z,.15,.25)
@@ -145,10 +169,12 @@ export function buildPuppy({ quality = 1 } = {}) {
     const earColor = (p,c) => {
       const t = p.y/.255, half = (.073+.061*smooth(t,0,.25))*Math.pow(Math.max(0,1-t),.72)+.001
       const edge = smooth(Math.abs(p.x-s*.028*t*t)/half,.30,.78)
-      c.copy(C.skin).lerp(C.cream,edge*.8).lerp(C.gold,(1-smooth(t,.0,.22))*.65+smooth(t,.75,1)*.6)
+      c.copy(C.skin).lerp(C.cream,edge*.55).lerp(C.gold,(1-smooth(t,.0,.22))*.65+smooth(t,.75,1)*.6)
       c.multiplyScalar(.78 + .22 * smooth(p.y,.0,.15))
+      // Mottled inner-ear skin rather than flat pink.
+      c.multiplyScalar(.93 + .07 * Math.sin(p.y*290+s)*Math.sin(p.x*240))
     }
-    const front = fur(earGeo, { count: 6500, length:.035, width:.0005, colorAt:earColor, lengthAt: p => .12 + smooth(Math.abs(p.x),.023,.065)*1.5, groom:[s*.15,1,.15] },ear)
+    const front = fur(earGeo, { count: 6500, length:.035, width:.0005, colorAt:earColor, lengthAt: p => .12 + smooth(Math.abs(p.x),.023,.065)*1.1, groom:[s*.15,1,.15] },ear)
     front.children[0].material.side = THREE.DoubleSide
     const back = earGeo.clone(); back.translate(0,0,-.012)
     // Flip rear winding and normals so coat grows away from the back of the ear.
@@ -159,21 +185,29 @@ export function buildPuppy({ quality = 1 } = {}) {
     rig.ears.push({group:ear,baseZ:ear.rotation.z,baseX:ear.rotation.x})
   }
 
-  // Corneas sit in the sculpted orbital cavities, surrounded by fleshy lids.
+  // Corneas sit in the sculpted orbital cavities. Unequal upper and lower arcs
+  // make a canine almond instead of a toy's circular button eye.
   const eyelids=[]
   for(const s of [-1,1]) {
-    const eye=new THREE.Group();eye.position.set(s*.103,.029,.158);eye.rotation.y=s*.17;head.add(eye)
+    const eye=new THREE.Group();eye.position.set(s*.092,.016,.180);eye.rotation.y=s*.09;head.add(eye)
     const positions=[],uvs=[],indices=[]
     const segments=40,rings=8
-    const outline=(a,r=1)=>[Math.cos(a)*.031*r,(Math.sin(a)*.016+s*Math.cos(a)*.002)*r]
+    const outline=(a,r=1)=>{
+      const upper=Math.sin(a)>0 ? 1.14 : .72
+      return [Math.cos(a)*.0365*r,(Math.sin(a)*.0195*upper+s*Math.cos(a)*.0022)*r]
+    }
     for(let j=0;j<=rings;j++)for(let i=0;i<=segments;i++){
       const r=j/rings,a=i/segments*Math.PI*2,[x,y]=outline(a,r)
-      positions.push(x,y,.017+.004*(1-r*r));uvs.push(.5+x/.062,.5+y/.062)
+      positions.push(x,y,.017+.004*(1-r*r));uvs.push(.5+x/.071,.5+y/.071)
       if(j<rings&&i<segments){const k=j*(segments+1)+i;indices.push(k,k+segments+1,k+1,k+1,k+segments+1,k+segments+2)}
     }
     const irisGeo=new THREE.BufferGeometry();irisGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));irisGeo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));irisGeo.setIndex(indices);irisGeo.computeVertexNormals()
     const globe=mesh(irisGeo,new THREE.MeshPhysicalMaterial({map:IRIS_MAP,color:'#ffffff',roughness:.38,clearcoat:.28,clearcoatRoughness:.16,envMapIntensity:.04}),[0,0,0],eye)
     rig.eyes.push(globe)
+    const corneaGeo=new THREE.SphereGeometry(.0375,24,12,0,Math.PI*2,0,.62)
+    corneaGeo.scale(1,.62,.42)
+    const cornea=mesh(corneaGeo,new THREE.MeshPhysicalMaterial({color:'#dfe8ea',transparent:true,opacity:.14,roughness:.06,clearcoat:1,clearcoatRoughness:.06,envMapIntensity:.5}),[0,.001,.004],eye)
+    cornea.castShadow=false
     const lidPositions=[],lidColors=[],lidIndices=[],rest=[],weights=[]
     for(let j=0;j<=5;j++)for(let i=0;i<=segments;i++){
       const t=j/5,a=i/segments*Math.PI*2,[x,y]=outline(a)
@@ -188,11 +222,11 @@ export function buildPuppy({ quality = 1 } = {}) {
     const lidGeo=new THREE.BufferGeometry();lidGeo.setAttribute('position',new THREE.Float32BufferAttribute(lidPositions,3));lidGeo.setAttribute('color',new THREE.Float32BufferAttribute(lidColors,3));lidGeo.setIndex(lidIndices);lidGeo.computeVertexNormals()
     const lidSurface=fur(lidGeo,{count:800,length:.0045,width:.00048,
       colorAt:(p,c)=>{
-        const r=Math.sqrt((p.x/.031)**2+(p.y/.017)**2)
+        const r=Math.sqrt((p.x/.035)**2+(p.y/.0195)**2)
         c.copy(C.mask).lerp(p.y<0?C.light:C.gold,smooth(r,1.02,1.35)*.62)
-        if(r<1.045)c.copy(C.lip)
+        if(r<1.02)c.copy(C.lip)
       },
-      lengthAt:p=>smooth(Math.sqrt((p.x/.037)**2+(p.y/.024)**2),1.1,1.35),
+      lengthAt:p=>smooth(Math.sqrt((p.x/.041)**2+(p.y/.026)**2),1.1,1.35),
       groom:[s*.7,.5,-.2]
     },eye)
     lidSurface.children[0].material.side=THREE.DoubleSide
@@ -210,16 +244,19 @@ export function buildPuppy({ quality = 1 } = {}) {
   }
 
   // Nose sits at the very end of the muzzle, with a central cleft and inset nares.
-  const noseGeo=ellipsoid(.047,.032,.024)
+  const noseGeo=ellipsoid(.054,.036,.027)
   const np=noseGeo.attributes.position
-  for(let i=0;i<np.count;i++) { const y=np.getY(i); np.setX(i,np.getX(i)*(y<0 ? .72+.28*(y+.038)/.038 : 1)) }
+  for(let i=0;i<np.count;i++) { const y=np.getY(i); np.setX(i,np.getX(i)*(y<0 ? .72+.28*(y+.042)/.042 : 1)) }
   noseGeo.computeVertexNormals()
-  mesh(noseGeo,new THREE.MeshPhysicalMaterial({color:C.nose,roughness:.63,clearcoat:.12,bumpMap:NOSE_BUMP,bumpScale:.002}),[0,-.085,.429],head)
+  mesh(noseGeo,new THREE.MeshPhysicalMaterial({color:C.nose,roughness:.5,clearcoat:.35,clearcoatRoughness:.4,bumpMap:NOSE_BUMP,bumpScale:.0035}),[0,-.085,.431],head)
   const nostrilMat=new THREE.MeshStandardMaterial({color:'#201317',roughness:.82})
   for(const s of [-1,1]) {
-    const nostril=mesh(ellipsoid(.010,.006,.0045),nostrilMat,[s*.024,-.086,.452],head);nostril.rotation.z=s*.23
+    const nostril=mesh(ellipsoid(.0115,.007,.005),nostrilMat,[s*.027,-.086,.454],head);nostril.rotation.z=s*.23
   }
-  tube([[0,-.087,.455],[0,-.105,.445],[0,-.116,.431]],.0010,nostrilMat,head)
+  tube([[0,-.087,.457],[0,-.105,.447],[0,-.116,.433]],.0010,nostrilMat,head)
+  const lipMat=new THREE.MeshStandardMaterial({color:'#2e1c1c',roughness:.8})
+  for(const s of [-1,1])
+    tube([[s*.006,-.096,.453],[s*.034,-.114,.40],[s*.056,-.138,.305],[s*.060,-.147,.252]],.0012,lipMat,head)
 
   // The mouth is only slightly parted; a short tongue tip rests between the lips.
   const jaw=new THREE.Group();jaw.position.set(0,-.137,.115);head.add(jaw);rig.jaw=jaw
@@ -238,16 +275,16 @@ export function buildPuppy({ quality = 1 } = {}) {
   mesh(tongueGeo,tongueMat,[0,0,0],tongue)
   tube([[0,.007,-.018],[0,.004,.002],[0,-.002,.022]],.00045,new THREE.MeshStandardMaterial({color:'#a65c6a',roughness:.65}),tongue)
 
-  const whiskerMat=new THREE.MeshStandardMaterial({color:'#685749',transparent:true,opacity:.45,roughness:.7})
+  const whiskerMat=new THREE.MeshStandardMaterial({color:'#685749',transparent:true,opacity:.30,roughness:.7})
   for(const s of [-1,1]) for(let i=0;i<6;i++) {
     const z=.245+i*.010, y=-.12+(i%3)*.015
-    tube([[s*.092,y,z],[s*(.145+(i%2)*.015),y+.01-i*.004,z+.015],[s*(.19+(i%3)*.022),y-.015-i*.006,z-.005-(i%2)*.018]],.00035,whiskerMat,head)
+    tube([[s*.092,y,z],[s*(.130+(i%2)*.012),y+.01-i*.004,z+.012],[s*(.160+(i%3)*.016),y-.015-i*.006,z-.005-(i%2)*.014]],.0003,whiskerMat,head)
   }
 
   const tail=new THREE.Group();tail.position.set(.08,.20,-.48);group.add(tail);rig.tail=tail
-  const tailCurve=new THREE.CatmullRomCurve3([[0,0,0],[.18,-.06,-.12],[.36,-.07,-.10],[.49,-.01,-.04],[.51,.08,.02]].map(p=>new THREE.Vector3(...p)))
-  const tailGeo=new THREE.TubeGeometry(tailCurve,48,.055,20,false)
-  fur(tailGeo,{count:9500,length:.062,width:.0007,colorAt:(p,c)=>c.copy(C.gold).lerp(C.white,smooth(p.x,.31,.48)),groom:(p,n,t)=>t.set(.8,.3,-.2)},tail)
+  const tailCurve=new THREE.CatmullRomCurve3([[0,0,0],[.20,-.05,-.14],[.40,-.06,-.12],[.56,-.045,-.06],[.66,-.01,-.02]].map(p=>new THREE.Vector3(...p)))
+  const tailGeo=new THREE.TubeGeometry(tailCurve,48,.052,20,false)
+  fur(tailGeo,{count:11000,length:.075,width:.0007,colorAt:(p,c)=>c.copy(C.gold).lerp(C.white,smooth(p.x,.38,.58)),groom:(p,n,t)=>t.set(.8,.3,-.2)},tail)
   fur(ellipsoid(.037,.04,.037),{count:700,length:.041,colorAt:solid(C.white),groom:[.4,1,0]},tail,tailCurve.getPoint(1).toArray())
 
   const collar=new THREE.Group();collar.position.set(0,.575,.075);group.add(collar);rig.collar=collar
@@ -255,7 +292,7 @@ export function buildPuppy({ quality = 1 } = {}) {
   strap.rotation.x=Math.PI/2;strap.scale.set(1,.94,1)
   const pendant=new THREE.Group();pendant.position.set(0,-.047,.240);collar.add(pendant);rig.pendant=pendant
   mesh(new THREE.TorusGeometry(.015,.0026,8,24),new THREE.MeshStandardMaterial({color:'#9eaaa8',metalness:.8,roughness:.3}),[0,0,0],pendant)
-  const tag=mesh(ellipsoid(.027,.079,.012),new THREE.MeshStandardMaterial({color:'#8fabc5',roughness:.38,metalness:.12}),[.016,-.08,.006],pendant);tag.rotation.z=.10
+  const tag=mesh(ellipsoid(.020,.045,.010),new THREE.MeshStandardMaterial({color:'#8fabc5',roughness:.38,metalness:.12}),[.014,-.062,.006],pendant);tag.rotation.z=.10
   mesh(ellipsoid(.021,.024,.021),new THREE.MeshStandardMaterial({color:'#650d35',metalness:.8,roughness:.23}),[-.028,-.042,.011],pendant)
 
   
