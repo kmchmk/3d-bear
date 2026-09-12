@@ -45,10 +45,11 @@ export function makeFurPart(geometry, {
                        mix(coatHash(i + vec3(0.,1.,1.)), coatHash(i + vec3(1.,1.,1.)), f.x), f.y), f.z);
       }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-        float patches = coatNoise(coatPosition * 13.0);
-        float grain = coatNoise(coatPosition * 165.0);
-        float strands = coatNoise(coatPosition * vec3(90.0, 260.0, 90.0));
-        float coatValue = .91 + (patches - .5) * .09 + (grain - .5) * .030 + (strands - .5) * .030;
+        float patches = coatNoise(coatPosition * 11.0);
+        float grain = coatNoise(coatPosition * 150.0);
+        float strands = coatNoise(coatPosition * vec3(70.0, 230.0, 70.0));
+        float streaks = coatNoise(coatPosition * vec3(260.0, 60.0, 260.0));
+        float coatValue = .88 + (patches - .5) * .15 + (grain - .5) * .055 + (strands - .5) * .055 + (streaks - .5) * .045;
         diffuseColor.rgb *= coatValue;`)
   }
   const skin = new THREE.Mesh(geometry, baseMaterial)
@@ -71,11 +72,11 @@ export function makeFurPart(geometry, {
     // A low-frequency cell makes neighbouring fibers agree on their length,
     // sweep and shade. Random per-fiber bends were what made the old coat look
     // like a collection of wires instead of compact tufts.
-    const cx = Math.floor(p.x * 23), cy = Math.floor(p.y * 23), cz = Math.floor(p.z * 23)
+    const cx = Math.floor(p.x * 19), cy = Math.floor(p.y * 19), cz = Math.floor(p.z * 19)
     const cell = Math.sin(cx * 127.1 + cy * 311.7 + cz * 74.7) * 43758.5453
     const clump = cell - Math.floor(cell)
     const cellTwist = Math.sin(cx * 269.5 + cy * 183.3 + cz * 419.2) * .5
-    const variation = .93 + clump * .07 + (random() - .5) * .02
+    const variation = .94 + clump * .06 + (random() - .5) * .015
     c.multiplyScalar(variation)
     if (typeof groom === 'function') groom(p, n, tangent)
     else tangent.set(...groom)
@@ -87,10 +88,10 @@ export function makeFurPart(geometry, {
     }
     tangent.normalize()
     side.crossVectors(n, tangent).normalize()
-    tangent.addScaledVector(side, cellTwist * .13).normalize()
+    tangent.addScaledVector(side, cellTwist * .16).normalize()
     side.crossVectors(n, tangent).normalize()
     const guard = random() > .94
-    const len = length * scale * (.72 + clump * .26 + (random() - .5) * .12) * (guard ? 1.34 : 1)
+    const len = length * scale * (.74 + clump * .24 + (random() - .5) * .08) * (guard ? 1.34 : 1)
     const w = width * (.62 + clump * .28)
     const curl = (cellTwist + (random() - .5) * .22) * len * .12
     // Per-fiber frizz breaks ribbon uniformity; tips wander while roots stay put.
@@ -113,7 +114,7 @@ export function makeFurPart(geometry, {
       strandNormal.crossVectors(curveDirection, side).normalize()
       const taper = w * (1 - t * .93) * .5
       // Deep root shadow for a dense double-coat read; tips carry agouti band.
-      const brightness = .68 + .32 * t
+      const brightness = .58 + .42 * t
       const tipMix = tipWeight * Math.pow(t, 1.5)
       strand.copy(c).lerp(tip, tipMix)
       for (const s of [-1, 1]) {
@@ -136,8 +137,8 @@ export function makeFurPart(geometry, {
   fibers.setIndex(indices)
   fibers.computeBoundingSphere()
   const hair = new THREE.Mesh(fibers, new THREE.MeshPhysicalMaterial({
-    vertexColors: true, alphaMap: FUR_STRAND_ALPHA, alphaTest: .13, alphaToCoverage: true,
-    roughness: .86, sheen: .22, sheenRoughness: .82, sheenColor: new THREE.Color(0x8a7a64),
+    vertexColors: true, alphaMap: FUR_STRAND_ALPHA, alphaTest: .34, alphaToCoverage: true,
+    roughness: .9, sheen: .14, sheenRoughness: .85, sheenColor: new THREE.Color(0x8a7a64),
     side: THREE.DoubleSide,
   }))
   hair.receiveShadow = true

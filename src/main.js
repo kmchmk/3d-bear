@@ -13,7 +13,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2))
 renderer.setSize(innerWidth,innerHeight)
 renderer.outputColorSpace=THREE.SRGBColorSpace
 renderer.toneMapping=THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure=1.05
+renderer.toneMappingExposure=1.0
 renderer.shadowMap.enabled=true
 renderer.shadowMap.type=THREE.VSMShadowMap
 const scene=new THREE.Scene()
@@ -21,23 +21,23 @@ scene.background=new THREE.Color('#e4e0d7')
 scene.fog=new THREE.Fog('#e4e0d7',8,18)
 const room=new RoomEnvironment(), pmrem=new THREE.PMREMGenerator(renderer)
 const environment=pmrem.fromScene(room,.04)
-scene.environment=environment.texture;scene.environmentIntensity=.78
+scene.environment=environment.texture;scene.environmentIntensity=.70
 room.dispose();pmrem.dispose()
 scene.add(new THREE.HemisphereLight('#f7f4ec','#8a7a66',.55))
-const key=new THREE.DirectionalLight('#fff2df',1.45)
+const key=new THREE.DirectionalLight('#fff2df',1.25)
 key.position.set(-2,4,5);key.castShadow=true
 key.shadow.mapSize.set(mobile?1024:2048,mobile?1024:2048)
 Object.assign(key.shadow.camera,{left:-2,right:2,top:2.5,bottom:-1.5,near:.5,far:12})
 key.shadow.bias=-.00015;key.shadow.normalBias=.012;key.shadow.radius=8;key.shadow.blurSamples=12
 scene.add(key)
 const fill=new THREE.DirectionalLight('#e8eeff',.48);fill.position.set(3.5,1.6,3);scene.add(fill)
-const rim=new THREE.DirectionalLight('#ffe9c8',.7);rim.position.set(1,3,-3);scene.add(rim)
-const eyeFill=new THREE.DirectionalLight('#fff8ee',.35);eyeFill.position.set(0,1.2,4);scene.add(eyeFill)
+const rim=new THREE.DirectionalLight('#ffe9c8',.55);rim.position.set(1,3,-3);scene.add(rim)
+const eyeFill=new THREE.DirectionalLight('#fff8ee',.30);eyeFill.position.set(0,1.2,4);scene.add(eyeFill)
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:'#ddd8cc',roughness:1}))
 floor.rotation.x=-Math.PI/2;floor.position.y=-.009;floor.receiveShadow=true;scene.add(floor)
 const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=256
 const ctx=shadowCanvas.getContext('2d'), gradient=ctx.createRadialGradient(128,128,0,128,128,128)
-gradient.addColorStop(0,'rgba(44,34,22,.38)');gradient.addColorStop(.4,'rgba(44,34,22,.17)');gradient.addColorStop(1,'rgba(44,34,22,0)')
+gradient.addColorStop(0,'rgba(44,34,22,.45)');gradient.addColorStop(.4,'rgba(44,34,22,.20)');gradient.addColorStop(1,'rgba(44,34,22,0)')
 ctx.fillStyle=gradient;ctx.fillRect(0,0,256,256)
 const shadow=new THREE.Mesh(new THREE.PlaneGeometry(1.45,1.25),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(shadowCanvas),transparent:true,depthWrite:false}))
 shadow.rotation.x=-Math.PI/2;shadow.position.set(0,-.007,0);scene.add(shadow)

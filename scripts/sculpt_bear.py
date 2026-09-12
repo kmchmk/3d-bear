@@ -12,30 +12,33 @@ bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=Fal
 import sys
 sys.path.insert(0,str(ROOT/'scripts'))
 from implicit_surface import smooth_anatomy
-# A puppy skull is a shallow wedge: a broad brain case and zygomatic arches
-# narrow through the maxilla to a small nasal pad.  Keeping the masses distinct
-# also gives the brow, stop, and jaw visible planes beneath the coat.
+# A puppy skull is a narrow wedge: a slim flat-topped brain case and shallow
+# zygomatic arches taper through the maxilla to a small nasal pad. Keeping the
+# masses distinct also gives the brow, stop, and jaw visible planes beneath
+# the coat. Cheek width comes from FUR (groomed ruff), not bone.
 head_volumes=[
- (0,.038,-.067,.178,.172,.155),       # broad but shallow cranial vault
-  (0,-.002,.052,.160,.135,.178),        # forehead falling into a short stop
- (0,-.041,.165,.108,.087,.176,.10,0,0), # long, tapering nasal bridge
- (0,-.074,.286,.088,.066,.132,.08,0,0), # muzzle root -- fuller chops
- (0,-.081,.373,.064,.047,.074,.04,0,0), # small incisive/nasal end
- (0,-.142,.220,.096,.045,.142),       # clear lower-jaw and chin plane
+ (0,.030,-.067,.160,.150,.150),       # slimmer, flatter cranial vault
+  (0,-.006,.052,.142,.128,.175),        # narrower forehead falling into a short stop
+ (0,-.045,.165,.095,.084,.176,.10,0,0), # slim, tapering nasal bridge
+  (0,-.078,.286,.078,.064,.132,.08,0,0), # tapered muzzle root -- lean chops
+ (0,-.084,.373,.056,.045,.080,.04,0,0), # small incisive/nasal end with planum pad
+ (0,-.144,.220,.088,.044,.140),       # clear lower-jaw and chin plane
 ]
 for sign in [-1,1]:
  head_volumes += [
-   (sign*.106,-.049,.040,.088,.099,.143), # projected cheek / zygomatic arch
-  (sign*.058,-.103,.281,.060,.047,.104), # fuller paired jowls, leaving a mouth crease
-   (sign*.100,.070,.088,.052,.030,.068),  # flatter brow, no horn-like knob
+   (sign*.100,-.049,.040,.078,.096,.130), # shallow cheek / zygomatic arch
+  (sign*.052,-.106,.281,.054,.046,.100), # lean paired jowls, leaving a mouth crease
+   (sign*.094,.055,.088,.040,.024,.064),  # low flat brow plane, no horn-like knob
  ]
 head=smooth_anatomy('Head',head_volumes,[[-.29,-.245,-.30],[.29,.265,.49]],.0047,.042,
   sockets=[(sign*.084,.010,.188,.036,.026,.040,.0,sign*.02,0) for sign in [-1,1]])
 
 # Low recumbent body.  The thorax is deeper than the abdomen, the pelvis is
 # narrower than the ribs, and each limb follows a sloped shoulder/elbow axis.
+# Limbs are lean (length reads from slimness); the ruff and furnishings come
+# from fur, not from fattened volumes.
 body_volumes=[
- (0,.295,-.150,.250,.175,.430),       # slimmer rib cage with a level back
+ (0,.295,-.150,.235,.172,.425),       # slimmer rib cage with a level back
  (0,.295,-.420,.200,.150,.240),       # loin bridging ribs to pelvis topline
  (0,.235,-.500,.200,.125,.230),       # tucked waist flowing into the pelvis
  (0,.331,.038,.236,.163,.255,-.18,0,0), # sternum tapering down between forelegs
@@ -44,19 +47,20 @@ body_volumes=[
 ]
 for sign in [-1,1]:
  body_volumes += [
-  (sign*.180,.285,.060,.080,.142,.093,.12,0,sign*.035), # upper foreleg
-   (sign*.155,.145,.170,.062,.082,.100,.12,0,sign*.02),  # planted elbow
-   (sign*.138,.082,.330,.054,.047,.185),                  # forearm on floor
-   (sign*.132,.062,.445,.054,.050,.082),                  # wrist into paw
-  (sign*.228,.315,-.060,.102,.118,.127,.08,0,sign*.06), # scapular muscle
+  (sign*.178,.285,.060,.068,.138,.085,.12,0,sign*.035), # lean upper foreleg
+   (sign*.153,.145,.170,.055,.080,.095,.12,0,sign*.02),  # planted elbow
+   (sign*.136,.082,.330,.048,.046,.185),                  # slim forearm on floor
+   (sign*.130,.062,.445,.048,.048,.082),                  # wrist into paw
+  (sign*.224,.315,-.060,.094,.116,.120,.08,0,sign*.06), # scapular muscle
  ]
 # Folded recumbent hindquarters: each thigh lies flat against the body with
-# the stifle forward, the gaskin folding back, and the foot pointing rearward.
+# the stifle forward, the gaskin folding back over a defined hock, and the
+# foot pointing rearward.
 body_volumes += [
- (.215,.195,-.360,.125,.135,.250,.10,0,.10),
- (.265,.085,-.220,.070,.060,.150,-.15,0,.16),
- (-.170,.185,-.390,.115,.115,.200,.04,0,-.05),
- (-.120,.070,-.300,.060,.050,.120,-.10,0,-.10),
+ (.210,.195,-.360,.110,.132,.245,.10,0,.10),
+ (.260,.088,-.220,.062,.058,.145,-.18,0,.16),
+ (-.168,.185,-.390,.104,.112,.195,.04,0,-.05),
+ (-.118,.073,-.300,.054,.048,.115,-.13,0,-.10),
 ]
 # The pelvis reaches z=-.715 and the blend radius extends past the raw
 # extents, so the sample box keeps a margin on every side; an isosurface at

@@ -33,14 +33,25 @@ the model into a separate chunk so the loading screen can paint first.
 
 ## Offline sculpt workflow
 
+Mac:
+
 ```sh
 /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python scripts/sculpt_bear.py
+```
+
+Linux (same flags, same script — install once, e.g. Blender 4.2 LTS):
+
+```sh
+curl -o /tmp/blender.tar.xz https://mirrors.dotsrc.org/blender/release/Blender4.2/blender-4.2.0-linux-x64.tar.xz
+tar -xf /tmp/blender.tar.xz -C /tmp/
+/tmp/blender-4.2.0-linux-x64/blender --background --factory-startup --python scripts/sculpt_bear.py
 ```
 
 `scripts/implicit_surface.py` creates smooth anatomical volumes. Blender cleans,
 optimizes, and exports them through `scripts/sculpt_bear.py`. An editable local
 copy is saved to `.review/bear-sculpt.blend`. Regeneration replaces the geometry
-JSON; rebuilding the website does not regenerate the sculpt.
+JSON; rebuilding the website does not regenerate the sculpt. Never hand-edit
+`src/sculpted-meshes.json` — regen only via the Blender command above.
 
 ## Reference privacy
 
@@ -55,3 +66,28 @@ media is denied by the development server.
 Production build, mesh data, browser rendering, responsive framing, and animation
 controls are checked locally. Phone-sized browser checks do not constitute real
 phone GPU testing. Deployment to a live Vercel project is a separate step.
+
+## Iteration loop (photorealism work program)
+
+Every iteration must end with ALL of these green:
+
+1. `npm run build` clean, and `dist/` contains only JS/JSON/HTML (no photos,
+   video, or audio — reference media is git-ignored and never ships).
+2. Zero browser console errors.
+3. `window.petBear()` produces nonzero tail rotation.
+4. A 390px-wide mobile load reaches ready state.
+5. Fresh desktop screenshots in strict order `default,face,side` (any other
+   order corrupts the default framing): serve with
+   `npx vite preview --port 4173 --strictPort`, capture with headless Chrome +
+   `--enable-unsafe-swiftshader` (plain headless Chrome has no WebGL here),
+   freeze the pose via the `window.__bear` rig before capture.
+6. An INDEPENDENT rater scores the new renders against the reference photos
+   (harsh, evidence-first: pixel-proof bullets before numbers, 1–10 per
+   category). Never self-rate. Save only the best set to
+   `.review/result-YYYY-MM-DD-{default,face,side,mobile}.png`.
+
+Status (2026-09-12): Phase 3 wedge resculpt landed (narrower skull, tapered
+muzzle, leaner legs, hock definition, high tail set) — independently rated
+4.1/10, up from ~2.6/10. Remaining gaps: eye shape/placement, coat strand
+read, mitten paws. Next: push past 4/10 toward 5/10 via eye architecture and
+procedural paw/toe separation.
