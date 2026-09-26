@@ -94,7 +94,8 @@ export function createFurMaterial({ shells, density = 210, rim = 0.08, tipLight 
         coverage = max(coverage, 1.0 - smoothstep(0.08, 0.2, vH));
         if (coverage < 0.02) discard;
         diffuseColor.a = coverage;
-        float occlusion = mix(0.45, 1.0, pow(vH, 0.8));
+        // Warm, slightly reddish occlusion deep in the coat (light scatters through hair).
+        vec3 occlusion = mix(vec3(0.5, 0.36, 0.28), vec3(1.0), pow(vH, 0.8));
         diffuseColor.rgb *= occlusion * (0.9 + 0.12 * s.z + 0.12 * clumpTone);
         diffuseColor.rgb = mix(diffuseColor.rgb, min(diffuseColor.rgb * 1.25 + 0.03, vec3(1.0)), vH * vH * uTipLight * 4.0);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>

@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { buildBear } from './bear.js'
 import { furUniforms } from './fur.js'
+import { hairUniforms } from './hair.js'
 
 const params = new URLSearchParams(location.search)
 const mobile = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600
@@ -16,38 +17,40 @@ let dpr = Math.min(devicePixelRatio, maxDpr)
 renderer.setPixelRatio(dpr)
 renderer.setSize(innerWidth, innerHeight)
 renderer.outputColorSpace = THREE.SRGBColorSpace
-renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 0.95
+renderer.toneMapping = THREE.NeutralToneMapping
+renderer.toneMappingExposure = 0.78
 renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.shadowMap.type = THREE.VSMShadowMap
 
 const scene = new THREE.Scene()
-const bg = new THREE.Color('#efe4d4')
+const bg = new THREE.Color('#d6cec4')
 scene.background = bg
 scene.fog = new THREE.Fog(bg, 6, 14)
 const pmrem = new THREE.PMREMGenerator(renderer)
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-scene.environmentIntensity = 0.45
+scene.environmentIntensity = 0.3
 
 // Soft daylight: warm key, cool sky fill, strong back rim so the fur halo glows.
-scene.add(new THREE.HemisphereLight('#fff6ea', '#9a8068', 0.55))
-const key = new THREE.DirectionalLight('#fff0dc', 2.4)
-key.position.set(-2.2, 3.4, 2.6)
+const hemi = new THREE.HemisphereLight('#ffeedd', '#6a4a36', 0.32)
+scene.add(hemi)
+const key = new THREE.DirectionalLight('#fff0dc', 3.0)
+key.position.set(-1.6, 4.2, 2.2)
 key.castShadow = true
 key.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048)
 Object.assign(key.shadow.camera, { left: -0.9, right: 0.9, top: 1.4, bottom: -0.4, near: 0.5, far: 9 })
-key.shadow.bias = -0.0004
-key.shadow.normalBias = 0.01
-key.shadow.radius = 4
+key.shadow.bias = -0.0005
+key.shadow.normalBias = 0.002
+key.shadow.radius = 14
+key.shadow.blurSamples = 16
 scene.add(key)
-const fill = new THREE.DirectionalLight('#dfe8ff', 0.5)
+const fill = new THREE.DirectionalLight('#dfe8ff', 0.3)
 fill.position.set(3, 1.2, 2)
 scene.add(fill)
 const rim = new THREE.DirectionalLight('#ffe2b8', 0.9)
 rim.position.set(1.5, 2.5, -3)
 scene.add(rim)
 
-const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 64), new THREE.MeshStandardMaterial({ color: '#e6d9c6', roughness: 1 }))
+const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 64), new THREE.MeshStandardMaterial({ color: '#cfc5b8', roughness: 1 }))
 floor.rotation.x = -Math.PI / 2
 floor.receiveShadow = true
 scene.add(floor)
@@ -57,8 +60,8 @@ scene.add(floor)
   c.width = c.height = 128
   const g = c.getContext('2d')
   const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64)
-  grd.addColorStop(0, 'rgba(60,40,25,0.5)')
-  grd.addColorStop(0.5, 'rgba(60,40,25,0.22)')
+  grd.addColorStop(0, 'rgba(50,32,20,0.6)')
+  grd.addColorStop(0.45, 'rgba(50,32,20,0.3)')
   grd.addColorStop(1, 'rgba(60,40,25,0)')
   g.fillStyle = grd
   g.fillRect(0, 0, 128, 128)
@@ -93,6 +96,7 @@ window.__bear = { rig, camera, controls, scene }
 const views = {
   full: { target: [0, 0.55, 0], dir: [0.55, 0.28, 1], dist: 3.1 },
   face: { target: [0, 0.9, 0.18], dir: [0.18, 0.06, 1], dist: 1.25 },
+  snout: { target: [0, 0.86, 0.3], dir: [0.3, 0.12, 1], dist: 0.55 },
   side: { target: [0.02, 0.5, -0.05], dir: [1, 0.22, 0.1], dist: 3.2 },
 }
 let tween = null
@@ -142,11 +146,12 @@ function pet() {
   state.excite = 1
   state.tiltTarget = (Math.random() < 0.5 ? -1 : 1) * 0.28
   state.nextTilt = 2.5
-  if (state.paused) render(1 / 60)
+  dirty = true
 }
 window.petBear = pet
 window.setView = setView
 window.toggleMotion = () => {
+  dirty = true
   state.paused = !state.paused
   document.getElementById('motion-button').setAttribute('aria-pressed', String(state.paused))
   document.getElementById('motion-button').textContent = state.paused ? 'Resume' : 'Pause'
@@ -205,10 +210,11 @@ function animate(dt) {
   s.nextBlink -= dt
   if (s.nextBlink < 0) { s.blink = 1; s.nextBlink = 2 + Math.random() * 4 }
   s.blink = Math.max(0, s.blink - dt * 7)
-  const lid = 1 - Math.sin(s.blink * Math.PI) * 0.92 - ex * 0.25
+  const close = Math.min(1, Math.sin(s.blink * Math.PI) + ex * 0.3)
   for (const eye of rig.eyes) {
     eye.userData.ball.rotation.set(-s.look.y * 0.3, s.look.x * 0.3, 0)
-    eye.scale.y = Math.max(0.08, lid)
+    eye.userData.lidTop.rotation.x = close * 1.05
+    eye.userData.lidBottom.rotation.x = -close * 0.25
   }
 
   // Ears: perk forward when curious, ease back when happy, with small twitches.
@@ -230,8 +236,9 @@ function animate(dt) {
 
   // Panting tongue.
   const pant = Math.sin(time * (5 + ex * 7))
-  rig.tongue.scale.setScalar(1 + ex * 0.25)
-  rig.tongue.rotation.x = pant * (0.05 + ex * 0.08)
+  // Tongue comes out to pant when he's happy, and tucks away at rest.
+  rig.tongue.rotation.x = pant * (0.03 + ex * 0.06)
+  rig.tongue.scale.set(1, 1, 1 + ex * 0.15 + pant * 0.02)
   rig.tag.rotation.z = Math.sin(time * 2.1) * 0.08 + wag * 0.2
 
   furUniforms.uTime.value = time
@@ -242,7 +249,22 @@ const clamp = (x, a, b) => Math.min(b, Math.max(a, x))
 // ---------- Loop -------------------------------------------------------------------
 
 const clock = new THREE.Clock()
+let dirty = true
+window.__bear.redraw = () => { dirty = true }
+addEventListener('resize', () => { dirty = true })
 let slowFrames = 0
+function updateHairLights() {
+  const view = camera.matrixWorldInverse
+  hairUniforms.uKeyDir.value.copy(key.position).normalize().transformDirection(view)
+  hairUniforms.uRimDir.value.copy(rim.position).normalize().transformDirection(view)
+  hairUniforms.uKeyColor.value.copy(key.color).multiplyScalar(key.intensity)
+  hairUniforms.uRimColor.value.copy(rim.color).multiplyScalar(rim.intensity)
+  // Hemisphere plus a rough share of the environment's irradiance.
+  const env = scene.environmentIntensity * 0.9
+  hairUniforms.uSky.value.copy(hemi.color).multiplyScalar(hemi.intensity + env)
+  hairUniforms.uGround.value.copy(hemi.groundColor).multiplyScalar(hemi.intensity + env * 0.6)
+  hairUniforms.uViewportH.value = renderer.domElement.height
+}
 function render(dt) {
   if (tween) {
     tween.t = Math.min(1, tween.t + dt * 1.6)
@@ -251,12 +273,17 @@ function render(dt) {
     controls.target.lerpVectors(tween.fromT, tween.toT, e)
     if (tween.t >= 1) tween = null
   }
-  controls.update()
+  camera.updateMatrixWorld()
+  updateHairLights()
   renderer.render(scene, camera)
 }
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05)
   if (!state.paused) animate(dt)
+  // While paused, only redraw when the view actually changes.
+  const moved = controls.update()
+  if (state.paused && !moved && !tween && !controls.autoRotate && !dirty) return
+  dirty = false
   render(dt)
   // Adaptive resolution: step down if the GPU can't keep up.
   if (dt > 1 / 40) slowFrames++
