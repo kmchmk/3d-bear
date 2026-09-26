@@ -1,93 +1,43 @@
-# Bear · 3D portrait
+# Bear · 3D puppy
 
-An interactive puppy built with Three.js and Vite. The head and body are sculpted
-and optimized offline in Blender, using the root photographs and shared Beary
-album as visual references. The resemblance remains an artistic reconstruction,
-not a photographic scan.
+An interactive, stylized-realistic 3D model of Bear, a fluffy red Pomsky-type puppy,
+built with Three.js and Vite. Drag to orbit, scroll/pinch to zoom, tap Bear to pet him.
 
 ## Run and deploy
 
 ```sh
 npm install
-npm run dev
-npm run build
-npm run preview
+npm run dev       # local dev server
+npm run build     # production build into dist/
+npm run preview   # serve the build
 ```
 
-Vercel configuration is included: Vite framework, `npm run build`, output `dist`.
-Blender and the reference media are not required on Vercel. The geometry-only
-`src/sculpted-meshes.json` export is part of the application source. Vite splits
-the model into a separate chunk so the loading screen can paint first.
+Vercel: `vercel.json` selects the Vite framework, `npm run build`, output `dist`.
+There are no server functions, environment variables or binary assets.
 
-## Model and rendering
+## How it works
 
-- Smooth anatomical body and head surfaces with carved orbital hollows.
-- Separate corneas, fur-covered eyelids, muzzle pads, jaw, ears, and tongue.
-- Tapered groomed fibers with varied lengths, clumps, guard hairs, and sheen.
-- Cream bib and socks, chocolate muzzle, hazel irises, and collar accessories.
-- Planted paws, local chest breathing, eyelid closure, ear twitches, and tail motion.
-- Orbit/zoom, four camera views, motion pause, and optional turntable.
-- Reduced-motion preferences pause the character initially.
-- Lower fur density and pixel ratio on small/touch devices; adaptive resolution
-  reduces GPU load if rendering falls behind.
+- `src/sdf.js`: signed-distance primitives (ellipsoids, round cones, smooth
+  union) and a surface-nets mesher. Bear is sculpted as SDFs and meshed in the
+  browser at load time (~1 s), so there's no model file to ship.
+- `src/bear.js`: the anatomy (sitting pose), plus per-vertex **markings**, **fur
+  length** and **groom direction**, painted by position to match Bear's photos:
+  red coat, cream bib and cheeks, white socks, cocoa muzzle mask, blue-grey eyes,
+  ginger ears with cream insides, bushy tail, pink collar with a blue tag.
+  Head, ears and tail are separate pivots for animation.
+- `src/fur.js`: shell fur. Each skin mesh is redrawn as an `InstancedMesh`, with each
+  shell pushed along the normal and combed. Procedural strands, clumping and
+  alpha-to-coverage make the coat soft.
+- `src/main.js`: lighting, camera views, idle behaviour (breathing, blinking, ear
+  twitches, curious head tilts, looking at the pointer, panting, tail wag) and petting.
 
-## Offline sculpt workflow
+Mobile gets fewer fur shells and a coarser mesh; resolution also steps down
+automatically if frames are slow.
 
-Mac:
+Debug URL params: `?view=face|full|side`, `?still` (freeze motion), `?nofur`
+(bare sculpt), `?q=0..1` (quality).
 
-```sh
-/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python scripts/sculpt_bear.py
-```
+## Reference photos
 
-Linux (same flags, same script — install once, e.g. Blender 4.2 LTS):
-
-```sh
-curl -o /tmp/blender.tar.xz https://mirrors.dotsrc.org/blender/release/Blender4.2/blender-4.2.0-linux-x64.tar.xz
-tar -xf /tmp/blender.tar.xz -C /tmp/
-/tmp/blender-4.2.0-linux-x64/blender --background --factory-startup --python scripts/sculpt_bear.py
-```
-
-`scripts/implicit_surface.py` creates smooth anatomical volumes. Blender cleans,
-optimizes, and exports them through `scripts/sculpt_bear.py`. An editable local
-copy is saved to `.review/bear-sculpt.blend`. Regeneration replaces the geometry
-JSON; rebuilding the website does not regenerate the sculpt. Never hand-edit
-`src/sculpted-meshes.json` — regen only via the Blender command above.
-
-## Reference privacy
-
-Root JPG/HEIC/MOV files and the shared album are modeling references only. No real
-photos or videos are displayed, loaded, or copied into the production website.
-Image/video/audio formats and Blender intermediates are ignored, including
-uppercase extensions. Vite public-directory copying is disabled and reference
-media is denied by the development server.
-
-## Validation scope
-
-Production build, mesh data, browser rendering, responsive framing, and animation
-controls are checked locally. Phone-sized browser checks do not constitute real
-phone GPU testing. Deployment to a live Vercel project is a separate step.
-
-## Iteration loop (photorealism work program)
-
-Every iteration must end with ALL of these green:
-
-1. `npm run build` clean, and `dist/` contains only JS/JSON/HTML (no photos,
-   video, or audio — reference media is git-ignored and never ships).
-2. Zero browser console errors.
-3. `window.petBear()` produces nonzero tail rotation.
-4. A 390px-wide mobile load reaches ready state.
-5. Fresh desktop screenshots in strict order `default,face,side` (any other
-   order corrupts the default framing): serve with
-   `npx vite preview --port 4173 --strictPort`, capture with headless Chrome +
-   `--enable-unsafe-swiftshader` (plain headless Chrome has no WebGL here),
-   freeze the pose via the `window.__bear` rig before capture.
-6. An INDEPENDENT rater scores the new renders against the reference photos
-   (harsh, evidence-first: pixel-proof bullets before numbers, 1–10 per
-   category). Never self-rate. Save only the best set to
-   `.review/result-YYYY-MM-DD-{default,face,side,mobile}.png`.
-
-Status (2026-09-12): Phase 3 wedge resculpt landed (narrower skull, tapered
-muzzle, leaner legs, hock definition, high tail set) — independently rated
-4.1/10, up from ~2.6/10. Remaining gaps: eye shape/placement, coat strand
-read, mitten paws. Next: push past 4/10 toward 5/10 via eye architecture and
-procedural paw/toe separation.
+The album is used only as a modelling reference. No photos are bundled or loaded
+by the site, and image and video files are git-ignored.
