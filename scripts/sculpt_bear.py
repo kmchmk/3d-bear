@@ -17,55 +17,46 @@ from implicit_surface import smooth_anatomy
 # masses distinct also gives the brow, stop, and jaw visible planes beneath
 # the coat. Cheek width comes from FUR (groomed ruff), not bone.
 head_volumes=[
- (0,.030,-.067,.160,.150,.150),       # slimmer, flatter cranial vault
-  (0,-.006,.052,.142,.128,.175),        # narrower forehead falling into a short stop
- (0,-.045,.165,.095,.084,.176,.10,0,0), # slim, tapering nasal bridge
-  (0,-.078,.286,.078,.064,.132,.08,0,0), # tapered muzzle root -- lean chops
- (0,-.084,.373,.056,.045,.080,.04,0,0), # small incisive/nasal end with planum pad
- (0,-.144,.220,.088,.044,.140),       # clear lower-jaw and chin plane
+ (0,.017,-.070,.150,.132,.152),
+ (0,.005,.024,.142,.121,.146),
+ (0,-.046,.113,.098,.077,.141,-.13,0,0),
+ (0,-.093,.209,.072,.048,.093,-.08,0,0),
+ (0,-.103,.261,.054,.036,.060),
 ]
 for sign in [-1,1]:
  head_volumes += [
-   (sign*.100,-.049,.040,.078,.096,.130), # shallow cheek / zygomatic arch
-  (sign*.052,-.106,.281,.054,.046,.100), # lean paired jowls, leaving a mouth crease
-   (sign*.094,.055,.088,.040,.024,.064),  # low flat brow plane, no horn-like knob
+  (sign*.097,-.039,.001,.052,.071,.096),
+  (sign*.041,-.109,.225,.041,.035,.067),
+  (sign*.095,.062,.051,.044,.023,.071),
  ]
-head=smooth_anatomy('Head',head_volumes,[[-.29,-.245,-.30],[.29,.265,.49]],.0047,.042,
-  sockets=[(sign*.084,.010,.188,.036,.026,.040,.0,sign*.02,0) for sign in [-1,1]])
+head=smooth_anatomy('Head',head_volumes,[[-.27,-.22,-.29],[.27,.25,.38]],.004,.035,
+ sockets=[(sign*.099,.031,.147,.044,.031,.078,0,sign*.17,0) for sign in [-1,1]])
 
-# Low recumbent body.  The thorax is deeper than the abdomen, the pelvis is
-# narrower than the ribs, and each limb follows a sloped shoulder/elbow axis.
-# Limbs are lean (length reads from slimness); the ruff and furnishings come
-# from fur, not from fattened volumes.
+# Recumbent skeleton: the sternum and elbows rest on the floor. The
+# scapula slopes into the ribs; the forearms extend ahead of the chest.
 body_volumes=[
- (0,.295,-.150,.235,.172,.425),       # slimmer rib cage with a level back
- (0,.295,-.420,.200,.150,.240),       # loin bridging ribs to pelvis topline
- (0,.235,-.500,.200,.125,.230),       # tucked waist flowing into the pelvis
- (0,.331,.038,.236,.163,.255,-.18,0,0), # sternum tapering down between forelegs
- (0,.505,.100,.153,.174,.164,-.38,0,0), # compact, sloping neck
- (0,.175,-.220,.190,.090,.270),       # tucked belly line, not a round barrel
+ (0,.222,-.170,.220,.173,.365),
+ (0,.183,-.440,.185,.138,.239),
+ (0,.180,-.650,.177,.127,.165),
+ (0,.230,.044,.182,.173,.200,-.20,0,0),
+ (0,.395,.083,.135,.173,.141,-.28,0,0),
+ (0,.130,-.210,.165,.112,.30),
 ]
 for sign in [-1,1]:
  body_volumes += [
-  (sign*.178,.285,.060,.068,.138,.085,.12,0,sign*.035), # lean upper foreleg
-   (sign*.153,.145,.170,.055,.080,.095,.12,0,sign*.02),  # planted elbow
-   (sign*.136,.082,.330,.048,.046,.185),                  # slim forearm on floor
-   (sign*.130,.062,.445,.048,.048,.082),                  # wrist into paw
-  (sign*.224,.315,-.060,.094,.116,.120,.08,0,sign*.06), # scapular muscle
+  (sign*.149,.191,.105,.064,.125,.108,.36,0,sign*.08),
+  (sign*.158,.081,.185,.057,.063,.086),
+  (sign*.150,.063,.337,.046,.041,.169,-.025,0,sign*.045),
+  (sign*.146,.055,.470,.048,.042,.072),
+  (sign*.178,.226,-.062,.065,.111,.166,-.35,0,sign*.06),
  ]
-# Folded recumbent hindquarters: each thigh lies flat against the body with
-# the stifle forward, the gaskin folding back over a defined hock, and the
-# foot pointing rearward.
 body_volumes += [
- (.210,.195,-.360,.110,.132,.245,.10,0,.10),
- (.260,.088,-.220,.062,.058,.145,-.18,0,.16),
- (-.168,.185,-.390,.104,.112,.195,.04,0,-.05),
- (-.118,.073,-.300,.054,.048,.115,-.13,0,-.10),
+ (.193,.161,-.461,.119,.135,.209,.11,0,.15),
+ (.273,.076,-.351,.070,.059,.138,-.18,.34,.14),
+ (-.161,.138,-.558,.096,.105,.177,.03,0,-.04),
+ (-.152,.056,-.447,.051,.043,.107),
 ]
-# The pelvis reaches z=-.715 and the blend radius extends past the raw
-# extents, so the sample box keeps a margin on every side; an isosurface at
-# a grid edge becomes an open, clipped mesh.
-body=smooth_anatomy('Body',body_volumes,[[-.43,-.03,-.81],[.46,.74,.60]],.0065,.046)
+body=smooth_anatomy('Body',body_volumes,[[-.42,-.08,-.91],[.46,.66,.62]],.006,.038)
 # Vertex counts are limited before export; fur is generated at runtime per device.
 import numpy as _np
 def _living_surface(ob, amp):
@@ -97,21 +88,11 @@ def _living_surface(ob, amp):
     mesh.vertices.foreach_set('co', co.ravel())
     mesh.update()
 for ob in [head,body]:
-    _living_surface(ob, .005 if ob == head else .007)
+    _living_surface(ob, .0018 if ob == head else .003)
     bpy.context.view_layer.objects.active=ob
     dec=ob.modifiers.new('Browser surface budget','DECIMATE');dec.ratio=.065 if ob==head else .060
     bpy.ops.object.modifier_apply(modifier=dec.name)
     for poly in ob.data.polygons:poly.use_smooth=True
 
-out={}
-for ob in [head,body]:
-    ob.data.calc_loop_triangles()
-    out[ob.name.lower()]={
-      'positions':[round(c,5) for v in ob.data.vertices for c in v.co],
-      'indices':[i for tri in ob.data.loop_triangles for i in tri.vertices],
-    }
-    print(ob.name, len(ob.data.vertices),'vertices',len(ob.data.loop_triangles),'triangles')
-(ROOT/'src'/'sculpted-meshes.json').write_text(json.dumps(out,separators=(',',':')))
-# Keep an editable local sculpt without including Blender files in the website.
-(ROOT/'.review').mkdir(exist_ok=True)
-bpy.ops.wm.save_as_mainfile(filepath=str(ROOT/'.review'/'bear-sculpt.blend'))
+from export_meshes import export_scene
+export_scene(ROOT)

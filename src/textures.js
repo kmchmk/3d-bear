@@ -28,8 +28,8 @@ export const IRIS_MAP = texture(512, (ctx, size, random) => {
   const r = size / 2
   ctx.fillStyle = '#14100b'; ctx.fillRect(0, 0, size, size)
   const g = ctx.createRadialGradient(r, r, r * 0.20, r, r, r)
-  g.addColorStop(0, '#8a7a5c'); g.addColorStop(0.34, '#7a6c4e')
-  g.addColorStop(0.58, '#54493a'); g.addColorStop(0.82, '#2e2820'); g.addColorStop(1, '#14100b')
+  g.addColorStop(0, '#6a5435'); g.addColorStop(0.34, '#705635')
+  g.addColorStop(0.58, '#443425'); g.addColorStop(0.82, '#2e2820'); g.addColorStop(1, '#14100b')
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(r, r, r, 0, Math.PI * 2); ctx.fill()
   // Dense radial fibers: bright gold + dark brown for a sunburst hazel read.
   for (let i = 0; i < 1700; i++) {
@@ -62,9 +62,9 @@ export const NOSE_BUMP = texture(256, (ctx, size, random) => {
 NOSE_BUMP.wrapS = NOSE_BUMP.wrapT = THREE.RepeatWrapping
 NOSE_BUMP.repeat.set(1, 1)
 
-// Each generated ribbon receives this mask in its own UV space. Its soft,
-// uneven edge breaks the hard card silhouette while the opaque core still
-// writes depth correctly in a dense coat.
+// Each generated ribbon receives this mask in its own UV space. The wide,
+// dense core keeps coverage at normal viewing distance; a feathered, slightly
+// irregular edge prevents the cards from reading as uniform plastic ribbons.
 export const FUR_STRAND_ALPHA = texture(128, (ctx, size) => {
   const image = ctx.createImageData(size, size)
   for (let y = 0; y < size; y++) {
@@ -72,10 +72,12 @@ export const FUR_STRAND_ALPHA = texture(128, (ctx, size) => {
     for (let x = 0; x < size; x++) {
       const u = x / (size - 1)
       const edge = Math.abs(u * 2 - 1)
-      const shaft = Math.max(0, 1 - Math.pow(edge, 2.35))
-      // Round the root very slightly and dissolve the last third into a tip.
-      const tip = 1 - Math.pow(Math.max(0, (v - .58) / .42), 1.55)
-      const root = .82 + .18 * Math.sin(v * Math.PI)
+      const waviness = .022 * Math.sin(v * 47 + Math.sin(v * 13) * 2.4)
+      const shaft = Math.max(0, 1 - Math.pow(Math.max(0, edge - waviness), 3.4))
+      // An opaque root anchors the coat. The final quarter dissolves gently;
+      // alpha-to-coverage turns this into a soft fiber tip on MSAA canvases.
+      const tip = 1 - Math.pow(Math.max(0, (v - .70) / .30), 1.42)
+      const root = .94 + .06 * Math.sin(v * Math.PI)
       const value = Math.round(255 * shaft * tip * root)
       const i = (y * size + x) * 4
       image.data[i] = image.data[i + 1] = image.data[i + 2] = value
@@ -87,3 +89,6 @@ export const FUR_STRAND_ALPHA = texture(128, (ctx, size) => {
 FUR_STRAND_ALPHA.wrapS = FUR_STRAND_ALPHA.wrapT = THREE.ClampToEdgeWrapping
 FUR_STRAND_ALPHA.magFilter = THREE.LinearFilter
 FUR_STRAND_ALPHA.minFilter = THREE.LinearMipmapLinearFilter
+
+// Ribbon v=0 is the root; canvas row zero contains its opaque coverage.
+FUR_STRAND_ALPHA.flipY = false

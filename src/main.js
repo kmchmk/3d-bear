@@ -21,18 +21,18 @@ scene.background=new THREE.Color('#e4e0d7')
 scene.fog=new THREE.Fog('#e4e0d7',8,18)
 const room=new RoomEnvironment(), pmrem=new THREE.PMREMGenerator(renderer)
 const environment=pmrem.fromScene(room,.04)
-scene.environment=environment.texture;scene.environmentIntensity=.70
+scene.environment=environment.texture;scene.environmentIntensity=.38
 room.dispose();pmrem.dispose()
-scene.add(new THREE.HemisphereLight('#f7f4ec','#8a7a66',.55))
-const key=new THREE.DirectionalLight('#fff2df',1.25)
-key.position.set(-2,4,5);key.castShadow=true
+scene.add(new THREE.HemisphereLight('#f7f4ec','#8a7a66',.35))
+const key=new THREE.DirectionalLight('#fff2df',2.1)
+key.position.set(-3,4,3);key.castShadow=true
 key.shadow.mapSize.set(mobile?1024:2048,mobile?1024:2048)
 Object.assign(key.shadow.camera,{left:-2,right:2,top:2.5,bottom:-1.5,near:.5,far:12})
-key.shadow.bias=-.00015;key.shadow.normalBias=.012;key.shadow.radius=8;key.shadow.blurSamples=12
+key.shadow.bias=-.00015;key.shadow.normalBias=.0018;key.shadow.radius=8;key.shadow.blurSamples=12
 scene.add(key)
-const fill=new THREE.DirectionalLight('#e8eeff',.48);fill.position.set(3.5,1.6,3);scene.add(fill)
-const rim=new THREE.DirectionalLight('#ffe9c8',.55);rim.position.set(1,3,-3);scene.add(rim)
-const eyeFill=new THREE.DirectionalLight('#fff8ee',.30);eyeFill.position.set(0,1.2,4);scene.add(eyeFill)
+const fill=new THREE.DirectionalLight('#e8eeff',.18);fill.position.set(3.5,1.6,3);scene.add(fill)
+const rim=new THREE.DirectionalLight('#ffe9c8',.35);rim.position.set(1,3,-3);scene.add(rim)
+const eyeFill=new THREE.DirectionalLight('#fff8ee',.07);eyeFill.position.set(0,1.2,4);scene.add(eyeFill)
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:'#ddd8cc',roughness:1}))
 floor.rotation.x=-Math.PI/2;floor.position.y=-.009;floor.receiveShadow=true;scene.add(floor)
 const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=256
@@ -50,7 +50,7 @@ controls.autoRotate=false;controls.autoRotateSpeed=.45
 let model
 try {
   const {buildPuppy}=await loadPuppy()
-  model=buildPuppy({quality:mobile?.36:.85})
+  model=buildPuppy({quality:mobile?.60:1})
 } catch(error) {
   document.querySelector('.veil-text').textContent='Bear could not load. Please reload the page.'
   console.error('Puppy model failed to load',error)
@@ -64,16 +64,16 @@ const portraitBounds=new THREE.Box3().setFromObject(puppy)
 const portraitCenter=portraitBounds.getCenter(new THREE.Vector3())
 const portraitHeight=portraitBounds.max.y-portraitBounds.min.y
 const fullTarget=[portraitCenter.x,portraitBounds.min.y+portraitHeight*.51,portraitCenter.z]
-const faceTarget=[rig.head.position.x,rig.head.position.y+.045,rig.head.position.z+.09]
+const faceTarget=[rig.head.position.x,rig.head.position.y+.095,rig.head.position.z+.09]
 const views={
-  default:{target:fullTarget,offset:[1.22,.40,3.25]},
-  face:{target:faceTarget,offset:[.12,.10,1.80]},
+  default:{target:fullTarget,offset:[1.65,.55,2.6]},
+  face:{target:faceTarget,offset:[.07,.055,1.28]},
   side:{target:fullTarget,offset:[3.7,.25,.12]},
   front:{target:fullTarget,offset:[0,.18,3.5]}
 }
 function fitView(name) {
   const view=views[name]||views.default
-  const factor=Math.max(1,(name==='face'?.66:.78)/camera.aspect)
+  const factor=Math.max(1,(name==='face'?.51:.75)/camera.aspect)
   controls.target.set(...view.target)
   camera.position.set(...view.offset).multiplyScalar(factor).add(controls.target)
   controls.update()
@@ -158,7 +158,7 @@ function animate(dt){
   rig.tail.rotation.y=Math.sin(tailPhase)*wag
   rig.tail.rotation.z=Math.sin(tailPhase+.6)*wag*.20
   const pant=Math.sin(t*(petTime>0?8.5:7))
-  rig.jaw.rotation.x=.16+pant*.014
+  rig.jaw.rotation.x=.035+pant*.006
   rig.tongue.rotation.x=.035+pant*.018
   rig.pendant.rotation.x=Math.sin(t*2.5+.7)*.025
   rig.pendant.rotation.z=-look.yaw*.07+Math.sin(t*2.5)*.009
