@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
-import { buildBear } from './bear.js'
+import { buildBear, JAW_OPEN } from './bear.js'
 import { furUniforms } from './fur.js'
 import { hairUniforms } from './hair.js'
 
@@ -18,7 +18,7 @@ renderer.setPixelRatio(dpr)
 renderer.setSize(innerWidth, innerHeight)
 renderer.outputColorSpace = THREE.SRGBColorSpace
 renderer.toneMapping = THREE.NeutralToneMapping
-renderer.toneMappingExposure = 0.78
+renderer.toneMappingExposure = 0.72
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.VSMShadowMap
 
@@ -86,7 +86,7 @@ controls.autoRotateSpeed = 0.8
 // Let the loading veil paint before the (synchronous) sculpt + mesh step.
 await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)))
 const t0 = performance.now()
-const bear = buildBear({ quality, fur: !params.has('nofur') })
+const bear = buildBear({ quality, fur: !params.has('nofur'), hair: !params.has('nohair') })
 let verts = 0
 bear.root.traverse(o => { if (o.isMesh && !o.isInstancedMesh) verts += o.geometry.attributes.position.count })
 console.info(`Bear built in ${Math.round(performance.now() - t0)} ms: ${verts} skin vertices, ${bear.stats.shells} fur shells`)
@@ -239,8 +239,11 @@ function animate(dt) {
   const pant = Math.sin(time * (5 + ex * 7))
   // Tongue comes out to pant when he's happy, and tucks away at rest.
   rig.tongue.rotation.x = pant * (0.03 + ex * 0.06)
-  rig.tongue.scale.set(1, 1, 1 + ex * 0.15 + pant * 0.02)
-  rig.tag.rotation.z = Math.sin(time * 2.1) * 0.08 + wag * 0.2
+  // Mouth closed at rest; it opens into a pant (tongue out) when he's happy.
+  s.pant = damp(s.pant ?? 0, ex > 0.08 ? 1 : 0, 4, dt)
+  rig.jaw.rotation.x = -JAW_OPEN * (1 - s.pant) + pant * 0.03 * s.pant
+  rig.tongue.scale.set(Math.max(1e-4, s.pant), Math.max(1e-4, s.pant), s.pant * (1 + ex * 0.15 + pant * 0.02) + 1e-4)
+  if (rig.tag) rig.tag.rotation.z = Math.sin(time * 2.1) * 0.08 + wag * 0.2
 
   furUniforms.uTime.value = time
   furUniforms.uWind.value.set(Math.sin(time * 0.7) * 0.06, 0, Math.cos(time * 0.5) * 0.04)

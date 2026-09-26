@@ -51,7 +51,8 @@ export function createFurMaterial({ shells, density = 210, rim = 0.08, tipLight 
         vRoot = position;
         float sway = sin(uTime * 1.7 + position.x * 9.0 + position.y * 7.0) * 0.5 + 0.5;
         vec3 bend = furComb * 0.85 + uGravity * 0.35 + uWind * sway;
-        transformed += normal * furH * furLen + bend * furLen * furH * furH;`)
+        // Coat lies down: strands rise less than their length and bend with the groom.
+        transformed += normal * furH * furLen * 0.8 + bend * furLen * furH * furH;`)
 
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
@@ -76,7 +77,8 @@ export function createFurMaterial({ shells, density = 210, rim = 0.08, tipLight 
         }`)
       .replace('#include <alphatest_fragment>', `#include <alphatest_fragment>
         if (vLen < 0.0035) discard;
-        vec3 q = vRoot * uDensity;
+        // Short fur (muzzle, paws) gets finer strands so it reads smooth, not hatched.
+        vec3 q = vRoot * uDensity * (1.0 + 1.3 * (1.0 - smoothstep(0.012, 0.035, vLen)));
         // Clumping: strands in a tuft converge toward its centre as they get longer.
         vec3 cq = vRoot * uDensity * 0.16;
         vec3 cc = floor(cq);

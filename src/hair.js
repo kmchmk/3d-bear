@@ -162,7 +162,7 @@ export function createHair(geometry, { perArea = 16000, minLen = 0.012, lengthSc
         float rim = sqrt(max(0.0, 1.0 - trl * trl)) * pow(clamp(dot(vNormalV, uRimDir) * 0.5 + 0.5, 0.0, 1.0), 2.0);
         vec3 ambient = mix(uGround, uSky, vNormalV.y * 0.5 + 0.5);
         float occlusion = mix(0.5, 1.0, vT);
-        vec3 albedo = vColor * mix(0.85, 1.12, vT);
+        vec3 albedo = vColor * mix(0.8, 1.02, vT);
         vec3 color = albedo * (ambient * occlusion + uKeyColor * diffuse * facing * occlusion)
           + uKeyColor * spec * 0.12 + albedo * uRimColor * rim * 0.6;
         gl_FragColor = vec4(color, vAlpha * (1.0 - smoothstep(0.75, 1.0, vT)));

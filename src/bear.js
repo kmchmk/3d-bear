@@ -13,9 +13,9 @@ import { createHair } from './hair.js'
 // Palette sampled from the reference photos, then nudged toward albedo.
 const hex = h => new THREE.Color(h)
 const C = {
-  ginger: hex('#aa6a3e'),
-  gingerDeep: hex('#8a4b27'),
-  gingerLight: hex('#c48a5a'),
+  ginger: hex('#a85f30'),
+  gingerDeep: hex('#86421d'),
+  gingerLight: hex('#c98e5c'),
   cream: hex('#e8c49a'),
   white: hex('#eedfc8'),
   mask: hex('#6b4128'),
@@ -31,7 +31,7 @@ const sym = (p, s) => [p[0] * s, p[1], p[2]]
 
 // ---------- Anatomy ----------------------------------------------------------------
 
-const EYE = { r: 0.0255, y: 0.934, z: 0.222, x: 0.052, slant: 0.2 }
+const EYE = { r: 0.0245, y: 0.936, z: 0.218, x: 0.056, slant: 0.2 }
 export const EYE_POS = [L(-EYE.x, EYE.y, EYE.z), L(EYE.x, EYE.y, EYE.z)]
 // Almond-shaped distance to an eye opening, outer corner raised (in multiples of EYE.r).
 export function eyeAlmond(x, y, z) {
@@ -47,9 +47,10 @@ export function eyeAlmond(x, y, z) {
 }
 export const NECK_PIVOT = L(0, 0.76, 0.07)
 export const TAIL_PIVOT = L(0, 0.19, -0.3)
-export const EAR_PIVOT = [L(-0.086, 1.035, 0.05), L(0.086, 1.035, 0.05)]
+export const EAR_PIVOT = [L(-0.084, 1.04, 0.045), L(0.084, 1.04, 0.045)]
 export const NOSE_POS = L(0, 0.878, 0.39)
 export const COLLAR = { c: L(0, 0.7, 0.07), r: 0.14, tilt: 0.32 }
+const WITH_COLLAR = false
 
 // Mouth geometry shared by the sculpt and the paint: the roof (underside of the upper
 // muzzle) and the top of the lower jaw, as heights at a given depth z.
@@ -58,6 +59,15 @@ const mouthRoof = z => mix(0.828, 0.826, smoothstep(0.22, 0.38, z))
 function jawTop(z) {
   const t = clamp((z - JAW.a[2]) / (JAW.b[2] - JAW.a[2]), 0, 1)
   return mix(JAW.a[1], JAW.b[1], t) + mix(JAW.ra, JAW.rb, t)
+}
+
+export const JAW_HINGE = L(0, 0.835, 0.19)
+export const JAW_OPEN = 0.21 // radians the jaw is sculpted open by
+function jawSDF(x, y, z) {
+  let d = roundCone(x, y, z, JAW.a, JAW.b, JAW.ra, JAW.rb)
+  // Chin and the soft skin under the jaw, tucking back into the throat.
+  d = smin(d, ellipsoid(x, y, z, L(0, 0.805, 0.215), L(0.04, 0.022, 0.05)), 0.02)
+  return d
 }
 
 function headSDF(x, y, z) {
@@ -72,8 +82,6 @@ function headSDF(x, y, z) {
   d = smin(d, roundCone(x, y, z, L(0, 0.893, 0.2), L(0, 0.874, 0.352), 0.071, 0.046), 0.04)
   // Upper lips (flews) hang at the sides and close the mouth corners.
   d = smin(d, roundCone(ax, y, z, L(0.036, 0.853, 0.22), L(0.024, 0.846, 0.342), 0.036, 0.021), 0.02)
-  // Lower jaw, dropped open for a relaxed pant.
-  d = smin(d, roundCone(x, y, z, JAW.a, JAW.b, JAW.ra, JAW.rb), 0.006)
   // Neck, overlapping the body so turns never open a gap.
   d = smin(d, roundCone(x, y, z, L(0, 0.64, 0.035), L(0, 0.88, 0.07), 0.125, 0.105), 0.06)
   // Eye sockets.
@@ -83,12 +91,12 @@ function headSDF(x, y, z) {
 
 function bodySDF(x, y, z) {
   const ax = Math.abs(x)
-  let d = ellipsoid(x, y, z, L(0, 0.55, 0.08), L(0.185, 0.22, 0.175)) // chest
-  d = smin(d, roundCone(x, y, z, L(0, 0.52, 0.02), L(0, 0.24, -0.13), 0.17, 0.2), 0.08) // torso
+  let d = ellipsoid(x, y, z, L(0, 0.6, 0.085), L(0.19, 0.19, 0.17)) // chest
+  d = smin(d, roundCone(x, y, z, L(0, 0.56, 0.02), L(0, 0.25, -0.13), 0.16, 0.195), 0.08) // torso
   d = smin(d, ellipsoid(x, y, z, L(0, 0.19, -0.14), L(0.215, 0.19, 0.21)), 0.06) // rump
   d = smin(d, roundCone(x, y, z, L(0, 0.62, 0.04), L(0, 0.8, 0.07), 0.13, 0.11), 0.06) // neck base
   // Haunches: thighs folded forward along the floor.
-  d = smin(d, ellipsoid(ax, y, z, L(0.15, 0.175, -0.05), L(0.105, 0.135, 0.17)), 0.05)
+  d = smin(d, ellipsoid(ax, y, z, L(0.165, 0.17, -0.08), L(0.115, 0.14, 0.165)), 0.05)
   // Hind feet: hock to toes, lying flat.
   d = smin(d, roundCone(ax, y, z, L(0.15, 0.07, -0.17), L(0.165, 0.038, 0.06), 0.052, 0.042), 0.035)
   d = smin(d, ellipsoid(ax, y, z, L(0.17, 0.042, 0.1), L(0.066, 0.044, 0.078)), 0.02)
@@ -96,10 +104,10 @@ function bodySDF(x, y, z) {
     d = smin(d, ellipsoid(ax, y, z, L(tx, 0.024, tz), L(0.021, 0.024, 0.024)), 0.012)
   }
   // Forelegs: straight and planted, a bit apart.
-  d = smin(d, roundCone(ax, y, z, L(0.092, 0.5, 0.09), L(0.1, 0.075, 0.16), 0.074, 0.058), 0.05)
+  d = smin(d, roundCone(ax, y, z, L(0.112, 0.54, 0.12), L(0.126, 0.075, 0.2), 0.064, 0.047), 0.05)
   // Big puppy paws: a pad plus four rounded toes.
-  d = smin(d, ellipsoid(ax, y, z, L(0.1, 0.04, 0.18), L(0.064, 0.042, 0.065)), 0.03)
-  for (const [tx, tz, r] of [[0.07, 0.235, 0.022], [0.092, 0.248, 0.024], [0.116, 0.246, 0.024], [0.136, 0.23, 0.021]]) {
+  d = smin(d, ellipsoid(ax, y, z, L(0.126, 0.04, 0.22), L(0.064, 0.042, 0.065)), 0.03)
+  for (const [tx, tz, r] of [[0.096, 0.275, 0.022], [0.118, 0.288, 0.024], [0.142, 0.286, 0.024], [0.162, 0.27, 0.021]]) {
     d = smin(d, ellipsoid(ax, y, z, L(tx, 0.026, tz), L(r, 0.026, r * 1.15)), 0.012)
   }
   return smax(d, -y + 0.004, 0.01) // flat on the floor
@@ -131,7 +139,7 @@ function tailParam(x, y, z) {
 }
 
 // Ear in its own frame: base centred on the origin, tip up +y, front facing +z.
-const EAR = { hw: 0.084, h: 0.145, t: 0.018 }
+const EAR = { hw: 0.074, h: 0.155, t: 0.02 }
 function earSDF(x, y, z) {
   const zc = z - 1.6 * x * x - 0.2 * (y / EAR.h) * 0.05 // edges curl forward into a cup
   const tri = triangle2(x, EAR.h - y, EAR.hw, EAR.h) - 0.015
@@ -157,13 +165,15 @@ function paintBody(x, y, z, n) {
   lerpColor(col, C.gingerDeep, smoothstep(0.2, 0.45, y) * smoothstep(0.0, -0.2, z) * (1 - smoothstep(0.08, 0.16, ax)) * 0.7)
   lerpColor(col, C.gingerDeep, smoothstep(0.3, 0.9, n[1]) * smoothstep(0.05, -0.2, z) * 0.5)
   // Cream bib: front of chest down between the forelegs.
-  const bib = smoothstep(0.04, 0.12, z + 0.03 * (0.65 - y)) * (1 - smoothstep(0.045, 0.085, ax)) * smoothstep(0.3, 0.42, y) * (1 - smoothstep(0.7, 0.78, y))
+  const bib = smoothstep(0.04, 0.12, z + 0.03 * (0.65 - y)) * (1 - smoothstep(0.075, 0.125, ax)) * smoothstep(0.36, 0.46, y) * (1 - smoothstep(0.7, 0.78, y))
   lerpColor(col, C.cream, bib)
   // Cream on the throat and under the neck.
   lerpColor(col, C.cream, smoothstep(0.04, 0.12, z) * smoothstep(0.62, 0.7, y) * (1 - smoothstep(0.05, 0.1, ax)) * 0.9)
   // Pale backs of the forelegs and inside of the thighs.
   lerpColor(col, C.cream, smoothstep(0.2, 0.6, -n[2]) * smoothstep(0.35, 0.2, y) * smoothstep(0.1, 0.2, z) * 0.6)
   lerpColor(col, C.cream, smoothstep(0.4, 0.9, -n[0] * Math.sign(x || 1)) * smoothstep(0.3, 0.1, y) * 0.45)
+  // Forelegs are paler down the front.
+  lerpColor(col, C.gingerLight, smoothstep(0.48, 0.3, y) * smoothstep(0.12, 0.18, z) * smoothstep(0.06, 0.09, ax) * (1 - smoothstep(0.18, 0.21, ax)) * 0.7)
   // Belly and underside of the rump.
   lerpColor(col, C.cream, smoothstep(-0.2, -0.8, n[1]) * 0.8)
   // White socks and feet.
@@ -173,11 +183,13 @@ function paintBody(x, y, z, n) {
   lerpColor(col, C.gingerLight, (grain - 0.5) * 0.6 + smoothstep(0.1, 0.18, ax) * smoothstep(0.25, 0.1, y) * 0.3)
 
   // Fur length: fluffy ruff and chest, medium body, short legs and feet.
-  let len = 0.06
+  let len = 0.048
   len = mix(len, 0.095, smoothstep(0.52, 0.7, y) * smoothstep(-0.05, 0.08, z)) // ruff
   len = mix(len, 0.08, bib)
-  len = mix(len, 0.075, smoothstep(0.15, -0.1, z) * smoothstep(0.3, 0.12, y)) // pants
-  len = mix(len, 0.03, smoothstep(0.4, 0.18, y) * smoothstep(0.1, 0.16, z) * (1 - smoothstep(0.13, 0.16, ax))) // forelegs
+  len = mix(len, 0.065, smoothstep(0.0, -0.15, z) * smoothstep(0.3, 0.12, y)) // pants
+  // Keep the forelegs clear: short coat on the lower chest and the flanks beside the legs.
+  len = mix(len, 0.026, smoothstep(0.5, 0.36, y) * smoothstep(0.0, 0.08, z))
+  len = mix(len, 0.018, smoothstep(0.46, 0.3, y) * smoothstep(0.1, 0.16, z) * smoothstep(0.06, 0.08, ax) * (1 - smoothstep(0.17, 0.2, ax))) // forelegs
   len = mix(len, 0.02, smoothstep(0.09, 0.04, y)) // toes
   len *= 0.85 + 0.3 * grain
   len *= collarPress(x, y, z)
@@ -185,7 +197,7 @@ function paintBody(x, y, z, n) {
 
   // Groom: down the legs, back and down on the body, down and out on the ruff.
   let comb = [0, -0.55, -0.6]
-  if (y < 0.45 && z > 0.08 && ax < 0.14) comb = [0, -1, 0.1]
+  if (y < 0.48 && z > 0.08 && ax > 0.06 && ax < 0.19) comb = [0, -1, 0.1]
   if (y > 0.5) comb = [x * 1.5, -0.8, 0.25]
   return { col, len, comb }
 }
@@ -274,6 +286,7 @@ function paintEar(x, y, z, n) {
 
 // The collar parts the fur a little.
 function collarPress(x, y, z) {
+  if (!WITH_COLLAR) return 1
   const dy = y - COLLAR.c[1], dz = z - COLLAR.c[2]
   const planeD = dy * Math.cos(COLLAR.tilt) + dz * Math.sin(COLLAR.tilt)
   return mix(0.08, 1, smoothstep(0.012, 0.04, Math.abs(planeD)))
@@ -313,6 +326,42 @@ function buildPart(sdf, paint, min, max, cell, pivot = [0, 0, 0]) {
 }
 
 let furEnabled = true
+let hairEnabled = true
+const HEAD_SCALE = 1.12
+const HEAD_OFFSET = [0, -0.07, 0.01]
+// Rest-pose distance to the whole puppy, in world (root) space, for baking occlusion.
+function puppySDF(x, y, z) {
+  const hx = NECK_PIVOT[0] + (x - NECK_PIVOT[0] - HEAD_OFFSET[0]) / HEAD_SCALE
+  const hy = NECK_PIVOT[1] + (y - NECK_PIVOT[1] - HEAD_OFFSET[1]) / HEAD_SCALE
+  const hz = NECK_PIVOT[2] + (z - NECK_PIVOT[2] - HEAD_OFFSET[2]) / HEAD_SCALE
+  const head = Math.min(headSDF(hx, hy, hz), jawSDF(hx, hy, hz)) * HEAD_SCALE
+  return Math.min(bodySDF(x, y, z), head, tailSDF(x, y, z))
+}
+
+// Ambient occlusion from the distance field: step out along the normal and see how much
+// closer the surface is than it would be in the open. Darkens creases (between the legs,
+// under the chin, where the head meets the ruff) in skin, shells and guard hairs alike.
+function bakeOcclusion(geometry, toWorld, strength = 1) {
+  const pos = geometry.attributes.position.array
+  const nor = geometry.attributes.normal.array
+  const col = geometry.attributes.color.array
+  const p = [0, 0, 0]
+  for (let v = 0; v < pos.length / 3; v++) {
+    toWorld(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2], p)
+    const nx = nor[v * 3], ny = nor[v * 3 + 1], nz = nor[v * 3 + 2]
+    let occ = 0, w = 1
+    for (let i = 1; i <= 6; i++) {
+      const h = 0.022 * i
+      occ += (h - puppySDF(p[0] + nx * h, p[1] + ny * h, p[2] + nz * h)) * w
+      w *= 0.8
+    }
+    const ao = clamp(1 - occ * 2.2 * strength, 0, 1)
+    // Occluded fur goes darker and a little redder rather than grey.
+    const k = mix(0.42, 1, ao)
+    col[v * 3] *= Math.min(1, k * 1.06); col[v * 3 + 1] *= k; col[v * 3 + 2] *= k * 0.94
+  }
+}
+
 function furred(geometry, fur, name) {
   const group = new THREE.Group()
   group.name = name
@@ -324,7 +373,7 @@ function furred(geometry, fur, name) {
   group.add(skin)
   if (furEnabled) {
     group.add(createFurMesh(geometry, fur))
-    if (fur.hair) group.add(createHair(geometry, fur.hair))
+    if (fur.hair && hairEnabled) group.add(createHair(geometry, fur.hair))
   }
   return { group, skin }
 }
@@ -493,17 +542,25 @@ function buildCollar() {
   return { group, tagPivot }
 }
 
-export function buildBear({ quality = 1, fur: withFur = true } = {}) {
+export function buildBear({ quality = 1, fur: withFur = true, hair: withHair = true } = {}) {
   furEnabled = withFur
+  hairEnabled = withHair
   const shells = Math.round(mix(14, 30, quality))
   const res = mix(1.45, 1, quality)
   const hairDensity = mix(7000, 22000, quality)
-  const fur = { shells, density: 150, hair: { perArea: hairDensity, lengthScale: 1.02, width: 0.0013, seed: 1 } }
+  const fur = { shells, density: 150, hair: { perArea: hairDensity * 0.35, lengthScale: 1.0, width: 0.0012, seed: 1, lift: 0.55 } }
 
   const root = new THREE.Group()
   root.name = 'bear'
 
-  const body = furred(buildPart(bodySDF, paintBody, [-0.3, -0.01, -0.4], [0.3, 0.86, 0.32], 0.0105 * res), fur, 'body')
+  const headWorld = (x, y, z, out, base = NECK_PIVOT) => {
+    out[0] = NECK_PIVOT[0] + HEAD_OFFSET[0] + (x + base[0] - NECK_PIVOT[0]) * HEAD_SCALE
+    out[1] = NECK_PIVOT[1] + HEAD_OFFSET[1] + (y + base[1] - NECK_PIVOT[1]) * HEAD_SCALE
+    out[2] = NECK_PIVOT[2] + HEAD_OFFSET[2] + (z + base[2] - NECK_PIVOT[2]) * HEAD_SCALE
+  }
+  const bodyGeo = buildPart(bodySDF, paintBody, [-0.3, -0.01, -0.4], [0.3, 0.86, 0.32], 0.0105 * res)
+  bakeOcclusion(bodyGeo, (x, y, z, o) => { o[0] = x; o[1] = y; o[2] = z })
+  const body = furred(bodyGeo, fur, 'body')
   root.add(body.group)
 
   const neck = new THREE.Group()
@@ -511,10 +568,21 @@ export function buildBear({ quality = 1, fur: withFur = true } = {}) {
   root.add(neck)
   const headRig = new THREE.Group() // separate node so nods/tilts compose cleanly
   neck.add(headRig)
-  const head = furred(buildPart(headSDF, paintHead, [-0.22, 0.6, -0.12], [0.22, 1.1, 0.45], 0.0072 * res, NECK_PIVOT), { ...fur, hair: { ...fur.hair, lift: 0.45, lengthScale: 0.9, seed: 2 } }, 'head')
+  const headFur = { ...fur, hair: { ...fur.hair, lift: 0.45, lengthScale: 0.9, minLen: 0.02, seed: 2 } }
+  const headGeo = buildPart(headSDF, paintHead, [-0.22, 0.6, -0.12], [0.22, 1.1, 0.45], 0.0072 * res, NECK_PIVOT)
+  bakeOcclusion(headGeo, (x, y, z, o) => headWorld(x, y, z, o), 0.8)
+  const head = furred(headGeo, headFur, 'head')
   headRig.add(head.group)
-  headRig.scale.setScalar(1.12)
-  headRig.position.set(0, -0.07, 0.01)
+  // Lower jaw hinges open to pant; it is sculpted open and closed by rotating up.
+  const jaw = new THREE.Group()
+  jaw.position.set(JAW_HINGE[0] - NECK_PIVOT[0], JAW_HINGE[1] - NECK_PIVOT[1], JAW_HINGE[2] - NECK_PIVOT[2])
+  headRig.add(jaw)
+  const jawGeo = buildPart(jawSDF, paintHead, [-0.08, 0.72, 0.13], [0.08, 0.88, 0.4], 0.0055 * res, JAW_HINGE)
+  bakeOcclusion(jawGeo, (x, y, z, o) => headWorld(x, y, z, o, JAW_HINGE), 0.8)
+  const jawPart = furred(jawGeo, { ...headFur, hair: { ...headFur.hair, seed: 3 } }, 'jaw')
+  jaw.add(jawPart.group)
+  headRig.scale.setScalar(HEAD_SCALE)
+  headRig.position.set(...HEAD_OFFSET)
 
   const local = p => [p[0] - NECK_PIVOT[0], p[1] - NECK_PIVOT[1], p[2] - NECK_PIVOT[2]]
   const tex = irisTexture()
@@ -530,9 +598,10 @@ export function buildBear({ quality = 1, fur: withFur = true } = {}) {
   nose.position.set(...local([0, 0, 0]))
   headRig.add(nose)
   const { pivot: tongue, mouth } = buildTongue()
-  tongue.position.sub(new THREE.Vector3(...NECK_PIVOT))
+  tongue.position.sub(new THREE.Vector3(...JAW_HINGE))
   mouth.position.sub(new THREE.Vector3(...NECK_PIVOT))
-  headRig.add(tongue, mouth)
+  jaw.add(tongue)
+  headRig.add(mouth)
 
   const earGeo = buildPart(earSDF, paintEar, [-0.11, -0.06, -0.08], [0.11, 0.2, 0.08], 0.0048 * res)
   const ears = EAR_PIVOT.map((p, i) => {
@@ -540,7 +609,7 @@ export function buildBear({ quality = 1, fur: withFur = true } = {}) {
     const pivot = new THREE.Group()
     pivot.position.set(...local(p))
     const base = new THREE.Group()
-    base.rotation.set(-0.1, s * 0.25, s * -0.12) // splayed outward, turned slightly to the side
+    base.rotation.set(-0.1, s * 0.08, s * -0.14) // splayed outward, turned slightly to the side
     pivot.add(base)
     const ear = furred(earGeo, { shells: Math.max(10, Math.round(shells * 0.6)), density: 230}, 'ear')
     base.add(ear.group)
@@ -551,16 +620,18 @@ export function buildBear({ quality = 1, fur: withFur = true } = {}) {
   const tailPivot = new THREE.Group()
   tailPivot.position.set(...TAIL_PIVOT)
   root.add(tailPivot)
-  const tail = furred(buildPart(tailSDF, paintTail, [-0.12, 0.0, -0.58], [0.47, 0.3, -0.1], 0.0095 * res, TAIL_PIVOT), fur, 'tail')
+  const tailGeo = buildPart(tailSDF, paintTail, [-0.12, 0.0, -0.58], [0.47, 0.3, -0.1], 0.0095 * res, TAIL_PIVOT)
+  bakeOcclusion(tailGeo, (x, y, z, o) => { o[0] = x + TAIL_PIVOT[0]; o[1] = y + TAIL_PIVOT[1]; o[2] = z + TAIL_PIVOT[2] })
+  const tail = furred(tailGeo, fur, 'tail')
   tailPivot.add(tail.group)
 
-  const collar = buildCollar()
-  root.add(collar.group)
+  const collar = WITH_COLLAR ? buildCollar() : null
+  if (collar) root.add(collar.group)
 
   return {
     root,
-    rig: { neck, headRig, eyes, ears, tail: tailPivot, tongue, tag: collar.tagPivot, chest: body.group },
-    pickables: [body.skin, head.skin, tail.skin],
+    rig: { neck, headRig, jaw, eyes, ears, tail: tailPivot, tongue, tag: collar?.tagPivot, chest: body.group },
+    pickables: [body.skin, head.skin, jawPart.skin, tail.skin],
     stats: { shells },
   }
 }
