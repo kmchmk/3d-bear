@@ -139,13 +139,17 @@ function landmarkLoss(a, b) {
 
 // ---------- Parameters -----------------------------------------------------------------
 // [name, min, max]. Shape params are shared by all views; camera params are per view.
+// Bounds are plausible puppy anatomy; fur thickness is fixed (it is a rendering
+// property the silhouette proxy only approximates, so letting it float lets the
+// optimiser trade coat for skull).
 const SHAPE_PARAMS = [
-  ['headScale', 0.9, 1.4], ['headY', -0.2, 0.08], ['skullW', 0.8, 1.35], ['skullH', 0.8, 1.3], ['cheekW', 0.7, 1.5],
-  ['muzzleLen', 0.7, 1.3], ['muzzleW', 0.8, 1.3], ['eyeX', 0.04, 0.075], ['eyeY', 0.9, 0.97], ['eyeR', 0.018, 0.032],
-  ['earX', 0.06, 0.11], ['earY', 0.98, 1.08], ['earW', 0.055, 0.1], ['earH', 0.11, 0.2], ['earSplay', -0.1, 0.5],
-  ['bodyW', 0.8, 1.3], ['bodyH', 0.8, 1.25], ['legX', 0.7, 1.4], ['legR', 0.7, 1.4], ['pawS', 0.8, 1.4], ['haunchW', 0.8, 1.3],
-  ['furHead', 0.3, 2], ['furBody', 0.3, 2],
+  ['headScale', 1.0, 1.3], ['headY', -0.14, 0.0], ['skullW', 0.9, 1.15], ['skullH', 0.9, 1.15], ['cheekW', 0.85, 1.2],
+  ['muzzleLen', 0.85, 1.15], ['muzzleW', 0.9, 1.12], ['eyeX', 0.05, 0.066], ['eyeY', 0.92, 0.96],
+  ['earX', 0.07, 0.105], ['earY', 1.0, 1.07], ['earW', 0.062, 0.09], ['earH', 0.13, 0.18], ['earSplay', 0.0, 0.35],
+  ['bodyW', 0.9, 1.15], ['bodyH', 0.9, 1.12], ['legX', 0.85, 1.25], ['legR', 0.85, 1.2], ['pawS', 0.9, 1.2], ['haunchW', 0.85, 1.15],
 ]
+// Prior: penalise moving away from the hand-sculpted starting shape, per unit of range.
+const PRIOR = +(process.env.PRIOR || 0.15)
 const VIEWS = (process.env.VIEWS || '094').split(',')
 const CAM_PARAMS = [['dist', 1.6, 6], ['elev', -0.15, 0.6], ['yaw', -0.4, 0.4], ['headYaw', -1.5, 1.5], ['headPitch', -0.5, 0.5], ['headRoll', -0.5, 0.5]]
 const START_CAM = { dist: 3, elev: 0.1, yaw: 0, headYaw: 0, headPitch: 0, headRoll: 0 }
@@ -155,6 +159,7 @@ const specs = [...SHAPE_PARAMS.map(([k, lo, hi]) => ({ k, lo, hi }))]
 for (const v of VIEWS) for (const [k, lo, hi] of CAM_PARAMS) specs.push({ k: `${v}.${k}`, lo, hi, view: v, ck: k })
 const toVec = () => specs.map(s => (s.view ? (START_VIEW[s.view]?.[s.ck] ?? START_CAM[s.ck]) : P[s.k]))
 const scale = specs.map(s => (s.hi - s.lo) * 0.08)
+const x0prior = specs.map(s => (s.view ? 0 : P[s.k]))
 
 const targets = Object.fromEntries(VIEWS.map(v => {
   const img = readPGM(`${DATA}${v}_mask.pgm`)
@@ -184,6 +189,7 @@ function evaluate(vec, detail = false) {
     total += pl + ll
     if (detail) parts[v].render = r
   }
+  specs.forEach((s, i) => { if (!s.view) total += PRIOR * VIEWS.length * ((vec[i] - x0prior[i]) / (s.hi - s.lo)) ** 2 })
   // Out-of-bounds penalty keeps the simplex inside the box.
   specs.forEach((s, i) => { if (vec[i] < s.lo) total += (s.lo - vec[i]) * 10; if (vec[i] > s.hi) total += (vec[i] - s.hi) * 10 })
   if (!Number.isFinite(total)) total = 10
