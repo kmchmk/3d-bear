@@ -1,0 +1,6 @@
+{
+ "_note": "One-time manual landmarks (pixel coords at 640px image height) where the pixel-rule detector is unreliable (tongue/tag confuse it in 3/4 views). eyes: [dog's right (-x), dog's left (+x)], null = not visible.",
+ "040": { "eyes": [null, [270, 302]], "nose": [328, 337] },
+ "018": { "eyes": [null, [263, 315]], "nose": [313, 351] },
+ "107": { "eyes": [null, [243, 315]], "nose": [300, 362] }
+}

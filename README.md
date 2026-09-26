@@ -37,6 +37,36 @@ automatically if frames are slow.
 Debug URL params: `?view=face|full|side`, `?still` (freeze motion), `?nofur`
 (bare sculpt), `?q=0..1` (quality).
 
+## Fitting the shape to photos (no AI in the loop)
+
+The anatomy numbers in `src/shape.json` and the coat colours in `src/palette.json` are
+fitted to Bear's photos by measurement, not by eye:
+
+1. `fit/segment.py <photos>`: GrabCut graph-cut segmentation separates Bear from the
+   background (seeded by coat-coloured pixels) → silhouette masks.
+2. `fit/landmarks.py`: pixel rules find ear tips (highest silhouette points), eyes (the
+   only low-saturation grey-blue pixels in the head) and the nose (darkest blob below the
+   eyes). Where rules are unreliable (tongue and tag in 3/4 views), `fit/manual.json`
+   holds one-time manual pixel coordinates.
+3. `fit/fit.mjs`: renders the model's silhouette by ray-marching its distance field
+   (`silhouetteSDF` in `src/bear.js`) from a virtual camera. It measures photo and render
+   with the same function: row-by-row left/right extents and filled width, plus
+   landmarks, all normalised by silhouette height. A pattern search then minimises the
+   difference over the shape parameters and each photo's camera and head pose. Output:
+   `src/shape.json` and `fit/data/report.json`.
+4. `fit/colors.py <view> <render.png>`: samples landmark-relative regions (forehead,
+   mask, cheeks, chest, legs, paws) in the photo and in a browser render from the fitted
+   camera (`?fit=dist,elev,yaw,headYaw,headPitch,headRoll&still&clean`), and corrects
+   each palette entry by the photo/render ratio in linear light.
+
+```sh
+python3 fit/segment.py /path/to/photos && python3 fit/landmarks.py
+VIEWS=094,040,018,107 node fit/fit.mjs 25
+python3 fit/plot.py profiles.png     # target vs render profiles
+```
+
+Photos and everything derived from them (`fit/data/`) stay local and are git-ignored.
+
 ## Reference photos
 
 The album is used only as a modelling reference. No photos are bundled or loaded

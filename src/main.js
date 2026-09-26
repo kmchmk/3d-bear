@@ -299,6 +299,22 @@ function frame() {
   }
 }
 animate(0.016)
+// ?fit=dist,elev,yaw,headYaw,headPitch,headRoll reproduces a camera and head pose found
+// by fit/fit.mjs for one reference photo (square viewport), for colour matching.
+if (params.has('fit')) {
+  const [dist, elev, yaw, hy, hp, hr] = params.get('fit').split(',').map(Number)
+  const target = new THREE.Vector3(0, 0.58, 0.04)
+  camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(0.8 / dist))
+  camera.aspect = innerWidth / innerHeight
+  camera.updateProjectionMatrix()
+  camera.position.set(Math.sin(yaw) * Math.cos(elev), Math.sin(elev), Math.cos(yaw) * Math.cos(elev)).multiplyScalar(dist).add(target)
+  controls.target.copy(target)
+  controls.update()
+  rig.neck.rotation.order = 'YXZ'
+  rig.neck.rotation.set(hp || 0, hy || 0, hr || 0)
+  rig.headRig.rotation.set(0, 0, 0)
+  for (const eye of rig.eyes) eye.userData.ball.rotation.set(0, 0, 0)
+}
 renderer.setAnimationLoop(frame)
 
 addEventListener('resize', () => {

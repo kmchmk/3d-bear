@@ -57,3 +57,6 @@ public/photos/
 *.[fF][bB][xX]
 __pycache__/
 .DS_Store
+
+# Fitting inputs derived from private reference photos stay local.
+fit/data/

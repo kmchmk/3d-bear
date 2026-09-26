@@ -4,35 +4,44 @@ import {
 } from './sdf.js'
 import { createFurMesh } from './fur.js'
 import { createHair } from './hair.js'
+import SHAPE from './shape.json' with { type: 'json' }
+import PALETTE from './palette.json' with { type: 'json' }
+
+// Fitted shape parameters. Defaults come from src/shape.json, which fit/fit.mjs writes
+// by matching measured silhouettes and landmarks in Bear's photos. Call setShape() to
+// override (the fitter does, many times per second).
+export const P = { ...SHAPE }
 
 // Bear: a red Pomsky-type puppy, sitting. Rest-pose coordinates are in "puppy units"
 // (floor at y = 0, ~1.2 tall to the ear tips, facing +z). Every part is an SDF in that
 // shared space, so markings and fur length are painted by position and line up across
 // part boundaries.
 
-// Palette sampled from the reference photos, then nudged toward albedo.
+// Palette: src/palette.json, corrected by fit/colors.py from photo/render pixel ratios.
 const hex = h => new THREE.Color(h)
-const C = {
-  ginger: hex('#a85f30'),
-  gingerDeep: hex('#86421d'),
-  gingerLight: hex('#c98e5c'),
-  cream: hex('#e8c49a'),
-  white: hex('#eedfc8'),
-  mask: hex('#6b4128'),
-  maskDark: hex('#3b271e'),
-  skin: hex('#3a2620'),
-  earPink: hex('#9a5a4a'),
-  lip: hex('#2a1614'),
-  gum: hex('#4a2226'),
-}
+const C = Object.fromEntries(Object.entries(PALETTE).map(([k, v]) => [k, hex(v)]))
 
 const L = (x, y, z) => [x, y, z]
 const sym = (p, s) => [p[0] * s, p[1], p[2]]
 
 // ---------- Anatomy ----------------------------------------------------------------
 
-const EYE = { r: 0.0245, y: 0.936, z: 0.218, x: 0.056, slant: 0.2 }
-export const EYE_POS = [L(-EYE.x, EYE.y, EYE.z), L(EYE.x, EYE.y, EYE.z)]
+let EYE, EYE_POS, EAR_PIVOT, NOSE_POS, EAR, MUZZLE_END, HEAD_SCALE, HEAD_OFFSET
+let JAW
+export function setShape(overrides = {}) {
+  Object.assign(P, overrides)
+  EYE = { r: P.eyeR, y: P.eyeY, z: 0.218, x: P.eyeX, slant: 0.2 }
+  EYE_POS = [L(-EYE.x, EYE.y, EYE.z), L(EYE.x, EYE.y, EYE.z)]
+  EAR_PIVOT = [L(-P.earX, P.earY, 0.045), L(P.earX, P.earY, 0.045)]
+  EAR = { hw: P.earW, h: P.earH, t: 0.02 }
+  MUZZLE_END = 0.2 + 0.152 * P.muzzleLen
+  NOSE_POS = L(0, 0.878, MUZZLE_END + 0.038)
+  JAW = { a: L(0, 0.815, 0.19), b: L(0, 0.77, MUZZLE_END - 0.019), ra: 0.043, rb: 0.026 }
+  HEAD_SCALE = P.headScale
+  // The head rides on the neck; if the body is taller or shorter, it moves with it.
+  HEAD_OFFSET = [0, P.headY + NECK_PIVOT[1] * (P.bodyH - 1), 0.01]
+}
+export { EYE_POS, NOSE_POS }
 // Almond-shaped distance to an eye opening, outer corner raised (in multiples of EYE.r).
 export function eyeAlmond(x, y, z) {
   let best = 1e9
@@ -47,14 +56,12 @@ export function eyeAlmond(x, y, z) {
 }
 export const NECK_PIVOT = L(0, 0.76, 0.07)
 export const TAIL_PIVOT = L(0, 0.19, -0.3)
-export const EAR_PIVOT = [L(-0.084, 1.04, 0.045), L(0.084, 1.04, 0.045)]
-export const NOSE_POS = L(0, 0.878, 0.39)
+setShape()
 export const COLLAR = { c: L(0, 0.7, 0.07), r: 0.14, tilt: 0.32 }
 const WITH_COLLAR = false
 
 // Mouth geometry shared by the sculpt and the paint: the roof (underside of the upper
 // muzzle) and the top of the lower jaw, as heights at a given depth z.
-const JAW = { a: L(0, 0.815, 0.19), b: L(0, 0.77, 0.333), ra: 0.043, rb: 0.026 }
 const mouthRoof = z => mix(0.828, 0.826, smoothstep(0.22, 0.38, z))
 function jawTop(z) {
   const t = clamp((z - JAW.a[2]) / (JAW.b[2] - JAW.a[2]), 0, 1)
@@ -73,15 +80,15 @@ function jawSDF(x, y, z) {
 function headSDF(x, y, z) {
   const ax = Math.abs(x)
   // Skull: broad and rounded, as a puppy's is.
-  let d = ellipsoid(x, y, z, L(0, 0.945, 0.11), L(0.14, 0.125, 0.132))
+  let d = ellipsoid(x, y, z, L(0, 0.945, 0.11), L(0.14 * P.skullW, 0.125 * P.skullH, 0.132))
   // Cheeks / zygomatic fluff base.
-  d = smin(d, ellipsoid(ax, y, z, L(0.072, 0.875, 0.17), L(0.08, 0.07, 0.08)), 0.05)
+  d = smin(d, ellipsoid(ax, y, z, L(0.072 * P.skullW, 0.875, 0.17), L(0.08 * P.cheekW, 0.07, 0.08)), 0.05)
   // Rounded forehead above the eyes gives a clear stop.
   d = smin(d, ellipsoid(x, y, z, L(0, 0.975, 0.17), L(0.085, 0.055, 0.06)), 0.04)
   // Muzzle: broad at the stop, moderately long (husky side of the cross).
-  d = smin(d, roundCone(x, y, z, L(0, 0.893, 0.2), L(0, 0.874, 0.352), 0.071, 0.046), 0.04)
+  d = smin(d, roundCone(x, y, z, L(0, 0.893, 0.2), L(0, 0.874, MUZZLE_END), 0.071 * P.muzzleW, 0.046 * P.muzzleW), 0.04)
   // Upper lips (flews) hang at the sides and close the mouth corners.
-  d = smin(d, roundCone(ax, y, z, L(0.036, 0.853, 0.22), L(0.024, 0.846, 0.342), 0.036, 0.021), 0.02)
+  d = smin(d, roundCone(ax, y, z, L(0.036, 0.853, 0.22), L(0.024, 0.846, MUZZLE_END - 0.01), 0.036 * P.muzzleW, 0.021 * P.muzzleW), 0.02)
   // Neck, overlapping the body so turns never open a gap.
   d = smin(d, roundCone(x, y, z, L(0, 0.64, 0.035), L(0, 0.88, 0.07), 0.125, 0.105), 0.06)
   // Eye sockets.
@@ -90,13 +97,17 @@ function headSDF(x, y, z) {
 }
 
 function bodySDF(x, y, z) {
+  const k = Math.min(P.bodyW, P.bodyH)
+  return bodyShape(x / P.bodyW, y / P.bodyH, z) * k
+}
+function bodyShape(x, y, z) {
   const ax = Math.abs(x)
   let d = ellipsoid(x, y, z, L(0, 0.6, 0.085), L(0.19, 0.19, 0.17)) // chest
   d = smin(d, roundCone(x, y, z, L(0, 0.56, 0.02), L(0, 0.25, -0.13), 0.16, 0.195), 0.08) // torso
   d = smin(d, ellipsoid(x, y, z, L(0, 0.19, -0.14), L(0.215, 0.19, 0.21)), 0.06) // rump
   d = smin(d, roundCone(x, y, z, L(0, 0.62, 0.04), L(0, 0.8, 0.07), 0.13, 0.11), 0.06) // neck base
   // Haunches: thighs folded forward along the floor.
-  d = smin(d, ellipsoid(ax, y, z, L(0.165, 0.17, -0.08), L(0.115, 0.14, 0.165)), 0.05)
+  d = smin(d, ellipsoid(ax, y, z, L(0.165 * P.haunchW, 0.17, -0.08), L(0.115 * P.haunchW, 0.14, 0.165)), 0.05)
   // Hind feet: hock to toes, lying flat.
   d = smin(d, roundCone(ax, y, z, L(0.15, 0.07, -0.17), L(0.165, 0.038, 0.06), 0.052, 0.042), 0.035)
   d = smin(d, ellipsoid(ax, y, z, L(0.17, 0.042, 0.1), L(0.066, 0.044, 0.078)), 0.02)
@@ -104,11 +115,12 @@ function bodySDF(x, y, z) {
     d = smin(d, ellipsoid(ax, y, z, L(tx, 0.024, tz), L(0.021, 0.024, 0.024)), 0.012)
   }
   // Forelegs: straight and planted, a bit apart.
-  d = smin(d, roundCone(ax, y, z, L(0.112, 0.54, 0.12), L(0.126, 0.075, 0.2), 0.064, 0.047), 0.05)
+  const lx = (P.legX - 1) * 0.12 // forelegs (and front paws) shift sideways together
+  d = smin(d, roundCone(ax - lx, y, z, L(0.112, 0.54, 0.12), L(0.126, 0.075, 0.2), 0.064 * P.legR, 0.047 * P.legR), 0.05)
   // Big puppy paws: a pad plus four rounded toes.
-  d = smin(d, ellipsoid(ax, y, z, L(0.126, 0.04, 0.22), L(0.064, 0.042, 0.065)), 0.03)
+  d = smin(d, ellipsoid(ax - lx, y, z, L(0.126, 0.04, 0.22), L(0.064 * P.pawS, 0.042, 0.065 * P.pawS)), 0.03)
   for (const [tx, tz, r] of [[0.096, 0.275, 0.022], [0.118, 0.288, 0.024], [0.142, 0.286, 0.024], [0.162, 0.27, 0.021]]) {
-    d = smin(d, ellipsoid(ax, y, z, L(tx, 0.026, tz), L(r, 0.026, r * 1.15)), 0.012)
+    d = smin(d, ellipsoid(ax - lx, y, z, L(0.126 + (tx - 0.126) * P.pawS, 0.026, tz), L(r * P.pawS, 0.026, r * 1.15 * P.pawS)), 0.012)
   }
   return smax(d, -y + 0.004, 0.01) // flat on the floor
 }
@@ -139,7 +151,6 @@ function tailParam(x, y, z) {
 }
 
 // Ear in its own frame: base centred on the origin, tip up +y, front facing +z.
-const EAR = { hw: 0.074, h: 0.155, t: 0.02 }
 function earSDF(x, y, z) {
   const zc = z - 1.6 * x * x - 0.2 * (y / EAR.h) * 0.05 // edges curl forward into a cup
   const tri = triangle2(x, EAR.h - y, EAR.hw, EAR.h) - 0.015
@@ -327,8 +338,6 @@ function buildPart(sdf, paint, min, max, cell, pivot = [0, 0, 0]) {
 
 let furEnabled = true
 let hairEnabled = true
-const HEAD_SCALE = 1.12
-const HEAD_OFFSET = [0, -0.07, 0.01]
 // Rest-pose distance to the whole puppy, in world (root) space, for baking occlusion.
 function puppySDF(x, y, z) {
   const hx = NECK_PIVOT[0] + (x - NECK_PIVOT[0] - HEAD_OFFSET[0]) / HEAD_SCALE
@@ -360,6 +369,75 @@ function bakeOcclusion(geometry, toWorld, strength = 1) {
     const k = mix(0.42, 1, ao)
     col[v * 3] *= Math.min(1, k * 1.06); col[v * 3 + 1] *= k; col[v * 3 + 2] *= k * 0.94
   }
+}
+
+// World-space distance to Bear as a camera sees him (skin plus coat), in the rest pose.
+// The fitter ray-marches this to render silhouettes; it mirrors buildBear's transforms.
+export function silhouetteSDF(x0, y0, z0, { tail = true, pose = null } = {}) {
+  let x = x0, y = y0, z = z0
+  if (pose) [x, y, z] = poseInverse([x0, y0, z0], pose)
+  // Head space (undo the head rig's offset and scale about the neck pivot).
+  const hx = NECK_PIVOT[0] + (x - NECK_PIVOT[0] - HEAD_OFFSET[0]) / HEAD_SCALE
+  const hy = NECK_PIVOT[1] + (y - NECK_PIVOT[1] - HEAD_OFFSET[1]) / HEAD_SCALE
+  const hz = NECK_PIVOT[2] + (z - NECK_PIVOT[2] - HEAD_OFFSET[2]) / HEAD_SCALE
+  let head = Math.min(headSDF(hx, hy, hz), jawSDF(hx, hy, hz))
+  for (let i = 0; i < 2; i++) {
+    const s = i === 0 ? -1 : 1
+    let ex = hx - EAR_PIVOT[i][0], ey = hy - EAR_PIVOT[i][1], ez = hz - EAR_PIVOT[i][2]
+    // Inverse of Euler XYZ (-0.1, s*yaw, -s*splay): apply Rz^T, Ry^T, Rx^T.
+    const a = -0.1, b = s * P.earYaw, c = -s * P.earSplay
+    let t = Math.cos(-c) * ex - Math.sin(-c) * ey; ey = Math.sin(-c) * ex + Math.cos(-c) * ey; ex = t
+    t = Math.cos(-b) * ex + Math.sin(-b) * ez; ez = -Math.sin(-b) * ex + Math.cos(-b) * ez; ex = t
+    t = Math.cos(-a) * ey - Math.sin(-a) * ez; ez = Math.sin(-a) * ey + Math.cos(-a) * ez; ey = t
+    head = Math.min(head, earSDF(ex, ey, ez) - 0.012)
+  }
+  head = head * HEAD_SCALE - 0.028 * P.furHead
+  x = x0; y = y0; z = z0
+  // Body coat: long ruff and chest, short on the forelegs and feet.
+  const legs = smoothstep(0.46, 0.3, y) * smoothstep(0.08, 0.16, z)
+  const body = bodySDF(x, y, z) - mix(0.045, 0.014, legs) * P.furBody
+  let d = Math.min(head, body)
+  if (tail) d = Math.min(d, tailSDF(x, y, z) - 0.07)
+  return d
+}
+// Head pose (yaw about y, then pitch about x, then roll about z) around the neck pivot.
+function rotate(v, { yaw = 0, pitch = 0, roll = 0 }, inverse) {
+  let [x, y, z] = v
+  const rz = (a) => { const c = Math.cos(a), s = Math.sin(a); [x, y] = [c * x - s * y, s * x + c * y] }
+  const rx = (a) => { const c = Math.cos(a), s = Math.sin(a); [y, z] = [c * y - s * z, s * y + c * z] }
+  const ry = (a) => { const c = Math.cos(a), s = Math.sin(a); [x, z] = [c * x + s * z, -s * x + c * z] }
+  if (inverse) { ry(-yaw); rx(-pitch); rz(-roll) } else { rz(roll); rx(pitch); ry(yaw) }
+  return [x, y, z]
+}
+function poseInverse(p, pose) {
+  const r = rotate([p[0] - NECK_PIVOT[0], p[1] - NECK_PIVOT[1], p[2] - NECK_PIVOT[2]], pose, true)
+  return [r[0] + NECK_PIVOT[0], r[1] + NECK_PIVOT[1], r[2] + NECK_PIVOT[2]]
+}
+// A head-space point (eye, nose, ear tip) in world space for a given head pose.
+export function headPoint(p, pose = {}) {
+  const w = headToWorld(p)
+  const r = rotate([w[0] - NECK_PIVOT[0], w[1] - NECK_PIVOT[1], w[2] - NECK_PIVOT[2]], pose, false)
+  return [r[0] + NECK_PIVOT[0], r[1] + NECK_PIVOT[1], r[2] + NECK_PIVOT[2]]
+}
+// Ear tips in head space (the tip of the ear frame, plus a little fur).
+export function earTips() {
+  return [0, 1].map(i => {
+    const s = i === 0 ? -1 : 1
+    let [x, y, z] = [0, EAR.h + 0.012, 0]
+    // Euler XYZ (-0.1, s*yaw, -s*splay): v' = Rx * Ry * Rz * v.
+    const a = -0.1, b = s * P.earYaw, c = -s * P.earSplay
+    ;[x, y] = [Math.cos(c) * x - Math.sin(c) * y, Math.sin(c) * x + Math.cos(c) * y]
+    ;[x, z] = [Math.cos(b) * x + Math.sin(b) * z, -Math.sin(b) * x + Math.cos(b) * z]
+    ;[y, z] = [Math.cos(a) * y - Math.sin(a) * z, Math.sin(a) * y + Math.cos(a) * z]
+    return [x + EAR_PIVOT[i][0], y + EAR_PIVOT[i][1], z + EAR_PIVOT[i][2]]
+  })
+}
+export function headToWorld(p) {
+  return [
+    NECK_PIVOT[0] + HEAD_OFFSET[0] + (p[0] - NECK_PIVOT[0]) * HEAD_SCALE,
+    NECK_PIVOT[1] + HEAD_OFFSET[1] + (p[1] - NECK_PIVOT[1]) * HEAD_SCALE,
+    NECK_PIVOT[2] + HEAD_OFFSET[2] + (p[2] - NECK_PIVOT[2]) * HEAD_SCALE,
+  ]
 }
 
 function furred(geometry, fur, name) {
@@ -609,7 +687,7 @@ export function buildBear({ quality = 1, fur: withFur = true, hair: withHair = t
     const pivot = new THREE.Group()
     pivot.position.set(...local(p))
     const base = new THREE.Group()
-    base.rotation.set(-0.1, s * 0.08, s * -0.14) // splayed outward, turned slightly to the side
+    base.rotation.set(-0.1, s * P.earYaw, s * -P.earSplay) // splayed outward, turned slightly to the side
     pivot.add(base)
     const ear = furred(earGeo, { shells: Math.max(10, Math.round(shells * 0.6)), density: 230}, 'ear')
     base.add(ear.group)
