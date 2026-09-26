@@ -18,7 +18,7 @@ const C = {
   gingerLight: hex('#c48a5a'),
   cream: hex('#e8c49a'),
   white: hex('#eedfc8'),
-  mask: hex('#5e3a26'),
+  mask: hex('#6b4128'),
   maskDark: hex('#3b271e'),
   skin: hex('#3a2620'),
   earPink: hex('#9a5a4a'),
@@ -31,7 +31,7 @@ const sym = (p, s) => [p[0] * s, p[1], p[2]]
 
 // ---------- Anatomy ----------------------------------------------------------------
 
-const EYE = { r: 0.0225, y: 0.932, z: 0.222, x: 0.05, slant: 0.2 }
+const EYE = { r: 0.0255, y: 0.934, z: 0.222, x: 0.052, slant: 0.2 }
 export const EYE_POS = [L(-EYE.x, EYE.y, EYE.z), L(EYE.x, EYE.y, EYE.z)]
 // Almond-shaped distance to an eye opening, outer corner raised (in multiples of EYE.r).
 export function eyeAlmond(x, y, z) {
@@ -47,13 +47,13 @@ export function eyeAlmond(x, y, z) {
 }
 export const NECK_PIVOT = L(0, 0.76, 0.07)
 export const TAIL_PIVOT = L(0, 0.19, -0.3)
-export const EAR_PIVOT = [L(-0.078, 1.04, 0.05), L(0.078, 1.04, 0.05)]
-export const NOSE_POS = L(0, 0.878, 0.405)
+export const EAR_PIVOT = [L(-0.086, 1.035, 0.05), L(0.086, 1.035, 0.05)]
+export const NOSE_POS = L(0, 0.878, 0.39)
 export const COLLAR = { c: L(0, 0.7, 0.07), r: 0.14, tilt: 0.32 }
 
 // Mouth geometry shared by the sculpt and the paint: the roof (underside of the upper
 // muzzle) and the top of the lower jaw, as heights at a given depth z.
-const JAW = { a: L(0, 0.815, 0.19), b: L(0, 0.768, 0.345), ra: 0.043, rb: 0.026 }
+const JAW = { a: L(0, 0.815, 0.19), b: L(0, 0.77, 0.333), ra: 0.043, rb: 0.026 }
 const mouthRoof = z => mix(0.828, 0.826, smoothstep(0.22, 0.38, z))
 function jawTop(z) {
   const t = clamp((z - JAW.a[2]) / (JAW.b[2] - JAW.a[2]), 0, 1)
@@ -66,10 +66,12 @@ function headSDF(x, y, z) {
   let d = ellipsoid(x, y, z, L(0, 0.945, 0.11), L(0.14, 0.125, 0.132))
   // Cheeks / zygomatic fluff base.
   d = smin(d, ellipsoid(ax, y, z, L(0.072, 0.875, 0.17), L(0.08, 0.07, 0.08)), 0.05)
+  // Rounded forehead above the eyes gives a clear stop.
+  d = smin(d, ellipsoid(x, y, z, L(0, 0.975, 0.17), L(0.085, 0.055, 0.06)), 0.04)
   // Muzzle: broad at the stop, moderately long (husky side of the cross).
-  d = smin(d, roundCone(x, y, z, L(0, 0.895, 0.2), L(0, 0.874, 0.365), 0.072, 0.047), 0.045)
+  d = smin(d, roundCone(x, y, z, L(0, 0.893, 0.2), L(0, 0.874, 0.352), 0.071, 0.046), 0.04)
   // Upper lips (flews) hang at the sides and close the mouth corners.
-  d = smin(d, roundCone(ax, y, z, L(0.036, 0.853, 0.22), L(0.024, 0.846, 0.355), 0.036, 0.021), 0.02)
+  d = smin(d, roundCone(ax, y, z, L(0.036, 0.853, 0.22), L(0.024, 0.846, 0.342), 0.036, 0.021), 0.02)
   // Lower jaw, dropped open for a relaxed pant.
   d = smin(d, roundCone(x, y, z, JAW.a, JAW.b, JAW.ra, JAW.rb), 0.006)
   // Neck, overlapping the body so turns never open a gap.
@@ -90,12 +92,15 @@ function bodySDF(x, y, z) {
   // Hind feet: hock to toes, lying flat.
   d = smin(d, roundCone(ax, y, z, L(0.15, 0.07, -0.17), L(0.165, 0.038, 0.06), 0.052, 0.042), 0.035)
   d = smin(d, ellipsoid(ax, y, z, L(0.17, 0.042, 0.1), L(0.066, 0.044, 0.078)), 0.02)
+  for (const [tx, tz] of [[0.148, 0.16], [0.17, 0.168], [0.192, 0.16]]) {
+    d = smin(d, ellipsoid(ax, y, z, L(tx, 0.024, tz), L(0.021, 0.024, 0.024)), 0.012)
+  }
   // Forelegs: straight and planted, a bit apart.
-  d = smin(d, roundCone(ax, y, z, L(0.088, 0.5, 0.09), L(0.09, 0.075, 0.16), 0.074, 0.058), 0.05)
-  d = smin(d, ellipsoid(ax, y, z, L(0.094, 0.042, 0.195), L(0.07, 0.046, 0.082)), 0.03)
-  // Toe grooves on the front paws.
-  for (const tx of [0.074, 0.094, 0.114]) {
-    d = smax(d, -roundCone(ax, y, z, L(tx, 0.07, 0.24), L(tx, 0.03, 0.285), 0.005, 0.005), 0.01)
+  d = smin(d, roundCone(ax, y, z, L(0.092, 0.5, 0.09), L(0.1, 0.075, 0.16), 0.074, 0.058), 0.05)
+  // Big puppy paws: a pad plus four rounded toes.
+  d = smin(d, ellipsoid(ax, y, z, L(0.1, 0.04, 0.18), L(0.064, 0.042, 0.065)), 0.03)
+  for (const [tx, tz, r] of [[0.07, 0.235, 0.022], [0.092, 0.248, 0.024], [0.116, 0.246, 0.024], [0.136, 0.23, 0.021]]) {
+    d = smin(d, ellipsoid(ax, y, z, L(tx, 0.026, tz), L(r, 0.026, r * 1.15)), 0.012)
   }
   return smax(d, -y + 0.004, 0.01) // flat on the floor
 }
@@ -126,10 +131,10 @@ function tailParam(x, y, z) {
 }
 
 // Ear in its own frame: base centred on the origin, tip up +y, front facing +z.
-const EAR = { hw: 0.074, h: 0.152, t: 0.02 }
+const EAR = { hw: 0.084, h: 0.145, t: 0.018 }
 function earSDF(x, y, z) {
   const zc = z - 1.6 * x * x - 0.2 * (y / EAR.h) * 0.05 // edges curl forward into a cup
-  const tri = triangle2(x, EAR.h - y, EAR.hw, EAR.h) - 0.011
+  const tri = triangle2(x, EAR.h - y, EAR.hw, EAR.h) - 0.015
   const slab = Math.abs(zc) - EAR.t
   let d = Math.min(Math.max(tri, slab), 0) + Math.hypot(Math.max(tri, 0), Math.max(slab, 0)) - 0.006
   // Hollow of the ear.
@@ -205,8 +210,8 @@ function paintHead(x, y, z, n) {
   lerpColor(col, C.cream, smoothstep(0.84, 0.76, y) * smoothstep(0.0, 0.1, z) * (1 - smoothstep(0.07, 0.13, ax)))
   // Chocolate mask: the whole upper muzzle down to the lip, up the bridge between the
   // eyes and softly into the forehead.
-  const maskMuzzle = smoothstep(roof + 0.004, roof + 0.016, y) * onMuzzle * (1 - smoothstep(0.075, 0.095, ax))
-  const maskBridge = smoothstep(0.052, 0.03, ax) * smoothstep(1.01, 0.95, y) * smoothstep(0.14, 0.19, z)
+  const maskMuzzle = smoothstep(roof + 0.004, roof + 0.016, y) * smoothstep(0.215, 0.245, z) * (1 - smoothstep(0.07, 0.09, ax))
+  const maskBridge = smoothstep(0.034, 0.018, ax) * smoothstep(0.99, 0.94, y) * smoothstep(0.16, 0.2, z)
   const mask = Math.max(maskMuzzle, maskBridge)
   lerpColor(col, C.mask, mask)
   lerpColor(col, C.maskDark, maskMuzzle * smoothstep(0.3, 0.36, z) * 0.5)
@@ -253,13 +258,17 @@ function paintTail(x, y, z, n) {
 function paintEar(x, y, z, n) {
   const col = C.ginger.clone()
   const front = smoothstep(-0.1, 0.35, n[2])
-  const inner = front * smoothstep(0.042, 0.018, Math.abs(x) + 0.3 * y) * smoothstep(0.12, 0.08, y) * smoothstep(-0.1, 0.4, n[2])
-  lerpColor(col, C.cream, inner * 0.85)
-  lerpColor(col, C.earPink, inner * smoothstep(0.03, 0.08, y) * smoothstep(0.03, 0.01, Math.abs(x)) * 0.5)
-  lerpColor(col, C.gingerDeep, smoothstep(0.13, 0.17, y) * 0.6) // darker tips
-  let len = mix(0.012, 0.03, inner)
-  len = mix(len, 0.035, front * smoothstep(0.07, 0.0, y) + smoothstep(0.03, 0.0, y) * 0.8) // inner tufts
-  len = mix(len, 0.016, smoothstep(0.055, 0.08, Math.abs(x) + y * 0.2) * front) // edge fringe
+  // Half-width of the ear at this height, and how far inside the hollow we are (0 edge, 1 centre).
+  const half = EAR.hw * Math.max(0.05, 1 - y / EAR.h)
+  const depth = 1 - Math.abs(x) / half
+  const skin = front * smoothstep(0.3, 0.55, depth) * smoothstep(0.01, 0.03, y) * smoothstep(EAR.h * 0.85, EAR.h * 0.6, y)
+  const fringe = front * smoothstep(0.05, 0.25, depth) * (1 - skin)
+  lerpColor(col, C.cream, fringe * 0.9)
+  lerpColor(col, C.earPink, skin)
+  let len = 0.011
+  len = mix(len, 0.024, fringe) // pale furnishings around the hollow
+  len = mix(len, 0.004, skin) // sparse over the pink skin
+  len = mix(len, 0.03, front * smoothstep(0.035, 0.0, y)) // tufts at the base
   return { col, len, comb: [x * 3, 0.9, 0.3] }
 }
 
@@ -367,7 +376,7 @@ function buildEye(tex) {
   )
   // Eyelids: dark-rimmed caps above and below the ball; the gap between them is the almond.
   const lidMat = new THREE.MeshStandardMaterial({ color: '#2b1a12', roughness: 0.6 })
-  const lidTop = new THREE.Mesh(new THREE.SphereGeometry(EYE.r * 1.07, 32, 12, 0, Math.PI * 2, 0, 0.98), lidMat)
+  const lidTop = new THREE.Mesh(new THREE.SphereGeometry(EYE.r * 1.07, 32, 12, 0, Math.PI * 2, 0, 0.86), lidMat)
   const lidBottom = new THREE.Mesh(new THREE.SphereGeometry(EYE.r * 1.06, 32, 12, 0, Math.PI * 2, Math.PI - 1.12, 1.12), lidMat)
   const lidTopPivot = new THREE.Group()
   lidTopPivot.add(lidTop)
@@ -380,7 +389,7 @@ function buildEye(tex) {
 
 function buildNose() {
   const c = NOSE_POS
-  const S = 1.35 // Bear's nose is big and broad
+  const S = 1.12 // Bear's nose is big and broad
   const sdf = (x, y, z) => noseShape((x - c[0]) / S, (y - c[1]) / S, (z - c[2]) / S, x, y, z) * S
   const noseShape = (px, py, pz, x, y, z) => {
     const ax = Math.abs(px)
@@ -402,12 +411,12 @@ function buildNose() {
   g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   g.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
   g.setIndex(new THREE.BufferAttribute(indices, 1))
-  const mesh = new THREE.Mesh(g, new THREE.MeshPhysicalMaterial({ color: '#4a2f2a', roughness: 0.55, envMapIntensity: 0.35 }))
+  const mesh = new THREE.Mesh(g, new THREE.MeshPhysicalMaterial({ color: '#5a342d', roughness: 0.5, clearcoat: 0.35, clearcoatRoughness: 0.45, envMapIntensity: 0.4 }))
   mesh.castShadow = true
   return mesh
 }
 
-const TONGUE_PTS = [L(0, 0.82, 0.25), L(0, 0.805, 0.33), L(0, 0.79, 0.366), L(0, 0.77, 0.376)]
+const TONGUE_PTS = [L(0.004, 0.819, 0.25), L(0.006, 0.806, 0.32), L(0.008, 0.792, 0.354), L(0.01, 0.772, 0.363)]
 const TONGUE_PIVOT = L(0, 0.815, 0.26)
 function buildTongue() {
   // A flat, slightly cupped tongue lying on the lower jaw and lolling over the lip.
@@ -421,7 +430,7 @@ function buildTongue() {
       const oy = y - (a[1] + dy * t), oz = z - (a[2] + dz * t)
       const along = oy * ty + oz * tz
       const across = -oy * tz + oz * ty // thickness direction (perpendicular in the yz-plane)
-      const w = mix(0.022, 0.019, (i + t) / 3), th = 0.0065
+      const w = mix(0.02, 0.017, (i + t) / 3), th = 0.0052
       const cup = 0.004 * (1 - (x / w) ** 2) // centre groove
       const e = Math.hypot(x / w, (across - cup) / th, along / w)
       d = smin(d, (e - 1) * th, 0.004)
@@ -436,7 +445,7 @@ function buildTongue() {
   g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   g.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
   g.setIndex(new THREE.BufferAttribute(indices, 1))
-  const mesh = new THREE.Mesh(g, new THREE.MeshPhysicalMaterial({ color: '#d46b76', roughness: 0.42, clearcoat: 0.6, clearcoatRoughness: 0.25 }))
+  const mesh = new THREE.Mesh(g, new THREE.MeshPhysicalMaterial({ color: '#d46b76', roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.12 }))
   const pivot = new THREE.Group()
   pivot.position.set(...TONGUE_PIVOT)
   pivot.add(mesh)
@@ -502,10 +511,10 @@ export function buildBear({ quality = 1, fur: withFur = true } = {}) {
   root.add(neck)
   const headRig = new THREE.Group() // separate node so nods/tilts compose cleanly
   neck.add(headRig)
-  const head = furred(buildPart(headSDF, paintHead, [-0.22, 0.6, -0.12], [0.22, 1.1, 0.45], 0.0072 * res, NECK_PIVOT), fur, 'head')
+  const head = furred(buildPart(headSDF, paintHead, [-0.22, 0.6, -0.12], [0.22, 1.1, 0.45], 0.0072 * res, NECK_PIVOT), { ...fur, hair: { ...fur.hair, lift: 0.45, lengthScale: 0.9, seed: 2 } }, 'head')
   headRig.add(head.group)
   headRig.scale.setScalar(1.12)
-  headRig.position.set(0, -0.055, 0.012)
+  headRig.position.set(0, -0.07, 0.01)
 
   const local = p => [p[0] - NECK_PIVOT[0], p[1] - NECK_PIVOT[1], p[2] - NECK_PIVOT[2]]
   const tex = irisTexture()
@@ -531,7 +540,7 @@ export function buildBear({ quality = 1, fur: withFur = true } = {}) {
     const pivot = new THREE.Group()
     pivot.position.set(...local(p))
     const base = new THREE.Group()
-    base.rotation.set(-0.1, s * 0.22, s * -0.06) // splayed outward, turned slightly to the side
+    base.rotation.set(-0.1, s * 0.25, s * -0.12) // splayed outward, turned slightly to the side
     pivot.add(base)
     const ear = furred(earGeo, { shells: Math.max(10, Math.round(shells * 0.6)), density: 230}, 'ear')
     base.add(ear.group)

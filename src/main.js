@@ -25,7 +25,7 @@ renderer.shadowMap.type = THREE.VSMShadowMap
 const scene = new THREE.Scene()
 const bg = new THREE.Color('#d6cec4')
 scene.background = bg
-scene.fog = new THREE.Fog(bg, 6, 14)
+
 const pmrem = new THREE.PMREMGenerator(renderer)
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
 scene.environmentIntensity = 0.3
@@ -34,7 +34,7 @@ scene.environmentIntensity = 0.3
 const hemi = new THREE.HemisphereLight('#ffeedd', '#6a4a36', 0.32)
 scene.add(hemi)
 const key = new THREE.DirectionalLight('#fff0dc', 3.0)
-key.position.set(-1.6, 4.2, 2.2)
+key.position.set(-1.1, 4.6, 1.6)
 key.castShadow = true
 key.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048)
 Object.assign(key.shadow.camera, { left: -0.9, right: 0.9, top: 1.4, bottom: -0.4, near: 0.5, far: 9 })
@@ -50,7 +50,8 @@ const rim = new THREE.DirectionalLight('#ffe2b8', 0.9)
 rim.position.set(1.5, 2.5, -3)
 scene.add(rim)
 
-const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 64), new THREE.MeshStandardMaterial({ color: '#cfc5b8', roughness: 1 }))
+// Seamless studio sweep: the floor only receives shadow, so it melts into the backdrop.
+const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 64), new THREE.ShadowMaterial({ color: '#3a2a1c', opacity: 0.32 }))
 floor.rotation.x = -Math.PI / 2
 floor.receiveShadow = true
 scene.add(floor)
@@ -212,7 +213,7 @@ function animate(dt) {
   s.blink = Math.max(0, s.blink - dt * 7)
   const close = Math.min(1, Math.sin(s.blink * Math.PI) + ex * 0.3)
   for (const eye of rig.eyes) {
-    eye.userData.ball.rotation.set(-s.look.y * 0.3, s.look.x * 0.3, 0)
+    eye.userData.ball.rotation.set(0.04 - s.look.y * 0.3, s.look.x * 0.3, 0)
     eye.userData.lidTop.rotation.x = close * 1.05
     eye.userData.lidBottom.rotation.x = -close * 0.25
   }

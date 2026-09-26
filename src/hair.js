@@ -30,7 +30,7 @@ function rand(seed) {
 }
 
 // Scatter strand roots over the mesh, area-weighted, where the coat is long enough.
-export function createHair(geometry, { perArea = 16000, minLen = 0.012, lengthScale = 1.25, width = 0.0016, seed = 1 } = {}) {
+export function createHair(geometry, { perArea = 16000, minLen = 0.012, lengthScale = 1.25, width = 0.0016, seed = 1, lift = 0.7, clump = 0.55 } = {}) {
   const pos = geometry.attributes.position.array
   const nor = geometry.attributes.normal.array
   const col = geometry.attributes.color.array
@@ -39,7 +39,9 @@ export function createHair(geometry, { perArea = 16000, minLen = 0.012, lengthSc
   const idx = geometry.index.array
   const rnd = rand(seed * 7919)
 
-  const roots = [], normals = [], colors = [], combs = [], lens = [], seeds = []
+  const roots = [], normals = [], colors = [], combs = [], lens = [], seeds = [], clumps = []
+  // Strands in the same small cell converge on that cell's first root (tufts).
+  const CELL = 0.022, centres = new Map()
   const v = [0, 0, 0]
   const lerp3 = (arr, a, b, c, u, w, out) => {
     const s = 1 - u - w
@@ -58,7 +60,12 @@ export function createHair(geometry, { perArea = 16000, minLen = 0.012, lengthSc
     for (let i = 0; i < count; i++) {
       let u = rnd(), w = rnd()
       if (u + w > 1) { u = 1 - u; w = 1 - w }
-      roots.push(...lerp3(pos, a, b, c, u, w, v))
+      const r = lerp3(pos, a, b, c, u, w, v)
+      roots.push(...r)
+      const key = `${Math.floor(r[0] / CELL)},${Math.floor(r[1] / CELL)},${Math.floor(r[2] / CELL)}`
+      if (!centres.has(key)) centres.set(key, [r[0], r[1], r[2]])
+      const cc = centres.get(key)
+      clumps.push(cc[0] - r[0], cc[1] - r[1], cc[2] - r[2])
       const nn = lerp3(nor, a, b, c, u, w, [0, 0, 0])
       const nl = Math.hypot(...nn) || 1
       normals.push(nn[0] / nl, nn[1] / nl, nn[2] / nl)
@@ -91,17 +98,18 @@ export function createHair(geometry, { perArea = 16000, minLen = 0.012, lengthSc
   base.setAttribute('iComb', new THREE.InstancedBufferAttribute(new Float32Array(combs), 3))
   base.setAttribute('iLen', new THREE.InstancedBufferAttribute(new Float32Array(lens), 1))
   base.setAttribute('iSeed', new THREE.InstancedBufferAttribute(new Float32Array(seeds), 1))
+  base.setAttribute('iClump', new THREE.InstancedBufferAttribute(new Float32Array(clumps), 3))
   base.instanceCount = lens.length
 
   const material = new THREE.ShaderMaterial({
-    uniforms: { ...furUniforms, ...hairUniforms, uWidth: { value: width } },
+    uniforms: { ...furUniforms, ...hairUniforms, uWidth: { value: width }, uLift: { value: lift }, uClump: { value: clump } },
     vertexShader: /* glsl */`
       attribute float t;
       attribute float side;
-      attribute vec3 iRoot, iNormal, iColor, iComb;
+      attribute vec3 iRoot, iNormal, iColor, iComb, iClump;
       attribute float iLen, iSeed;
       uniform vec3 uGravity, uWind;
-      uniform float uTime, uWidth, uViewportH;
+      uniform float uTime, uWidth, uViewportH, uLift, uClump;
       varying vec3 vColor;
       varying vec3 vTangent;
       varying vec3 vNormalV;
@@ -111,8 +119,12 @@ export function createHair(geometry, { perArea = 16000, minLen = 0.012, lengthSc
         // Each strand wanders a little from the groom so the coat isn't combed flat.
         vec3 jitter = (vec3(fract(iSeed * 13.1), fract(iSeed * 71.7), fract(iSeed * 37.3)) - 0.5) * 0.7;
         vec3 bend = iComb * 0.85 + uGravity * 0.35 + uWind * sway + jitter * 0.35;
-        vec3 p = iRoot + iNormal * iLen * t + bend * iLen * t * t;
-        vec3 tangent = normalize(iNormal + 2.0 * bend * t);
+        // Soft wave along the strand, perpendicular to the groom.
+        vec3 waveDir = normalize(cross(iNormal, iComb + vec3(1e-3)));
+        float wave = sin(t * 4.0 + iSeed * 40.0) * 0.12 * t;
+        vec3 p = iRoot + iNormal * iLen * t * uLift + bend * iLen * t * t
+          + iClump * uClump * t * t + waveDir * wave * iLen;
+        vec3 tangent = normalize(iNormal * uLift + 2.0 * bend * t + 2.0 * iClump * uClump * t / max(iLen, 1e-3));
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         vec3 tv = normalize((modelViewMatrix * vec4(tangent, 0.0)).xyz);
         vec3 across = normalize(cross(tv, normalize(-mv.xyz)));
