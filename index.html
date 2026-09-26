@@ -3,9 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#f7eee1" />
+    <meta name="theme-color" content="#efe4d4" />
     <link rel="icon" href="data:," />
-    <title>Bear · 3D portrait</title>
+    <title>Bear · 3D puppy</title>
+    <meta name="description" content="Bear, a fluffy red Pomsky puppy, in interactive 3D." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19,7 +20,7 @@
       html, body {
         height: 100%;
         overflow: hidden;
-        background: radial-gradient(120% 90% at 50% 20%, #fffcf7 0%, #f7eee1 55%, #e5d7c5 100%);
+        background: radial-gradient(120% 90% at 50% 20%, #fffcf7 0%, #efe4d4 55%, #e5d7c5 100%);
         font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         -webkit-tap-highlight-color: transparent;
         user-select: none;
@@ -129,7 +130,7 @@
       #veil {
         position: fixed;
         inset: 0;
-        background: #f7eee1;
+        background: #efe4d4;
         z-index: 10;
         display: flex;
         flex-direction: column;
@@ -192,24 +193,23 @@
 
     <div id="header">
       <h1>Bear</h1>
-      <p>A study of Bear</p>
+      <p>Fluffy, red and very good</p>
     </div>
 
     <div id="toolbar">
       <button class="btn btn-pet" onclick="window.petBear()">Pet Bear</button>
       <button class="btn" data-view="face" aria-pressed="false" onclick="window.setView('face')">Face</button>
-      <button class="btn" data-view="default" aria-pressed="true" onclick="window.setView('default')">Full view</button>
-      <button class="btn" data-view="side" aria-pressed="false" onclick="window.setView('side')">Profile</button>
-      <button class="btn" data-view="front" aria-pressed="false" onclick="window.setView('front')">Front</button>
-      <button class="btn" id="motion-button" aria-pressed="false" onclick="window.toggleMotion()">Pause motion</button>
+      <button class="btn" data-view="full" aria-pressed="true" onclick="window.setView('full')">Full</button>
+      <button class="btn" data-view="side" aria-pressed="false" onclick="window.setView('side')">Side</button>
       <button class="btn" id="rotate-button" aria-pressed="false" onclick="window.toggleRotate()">Turntable</button>
+      <button class="btn" id="motion-button" aria-pressed="false" onclick="window.toggleMotion()">Pause</button>
     </div>
 
-    <div id="hint">Drag to 3D rotate &nbsp;·&nbsp; Pinch or scroll to zoom &nbsp;·&nbsp; Click or tap to pet</div>
+    <div id="hint">Drag to turn &nbsp;·&nbsp; Pinch or scroll to zoom &nbsp;·&nbsp; Tap Bear to pet him</div>
 
     <div id="veil">
       <div class="paw"></div>
-      <div class="veil-text">Rendering Bear...</div>
+      <div class="veil-text">Grooming Bear…</div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

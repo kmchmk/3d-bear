@@ -1,190 +1,283 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
-// Load the sculpt separately so the page can paint its loading state first.
-const loadPuppy = () => import('./puppy.js')
-import { seededRandom } from './fur.js'
+import { buildBear } from './bear.js'
+import { furUniforms } from './fur.js'
 
-const mobile = matchMedia('(pointer: coarse)').matches || innerWidth < 700
-const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
+const params = new URLSearchParams(location.search)
+const mobile = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600
+const quality = params.has('q') ? Number(params.get('q')) : mobile ? 0.45 : 1
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+
 const canvas = document.getElementById('scene')
-const renderer = new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
-renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2))
-renderer.setSize(innerWidth,innerHeight)
-renderer.outputColorSpace=THREE.SRGBColorSpace
-renderer.toneMapping=THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure=1.0
-renderer.shadowMap.enabled=true
-renderer.shadowMap.type=THREE.VSMShadowMap
-const scene=new THREE.Scene()
-scene.background=new THREE.Color('#e4e0d7')
-scene.fog=new THREE.Fog('#e4e0d7',8,18)
-const room=new RoomEnvironment(), pmrem=new THREE.PMREMGenerator(renderer)
-const environment=pmrem.fromScene(room,.04)
-scene.environment=environment.texture;scene.environmentIntensity=.38
-room.dispose();pmrem.dispose()
-scene.add(new THREE.HemisphereLight('#f7f4ec','#8a7a66',.35))
-const key=new THREE.DirectionalLight('#fff2df',2.1)
-key.position.set(-3,4,3);key.castShadow=true
-key.shadow.mapSize.set(mobile?1024:2048,mobile?1024:2048)
-Object.assign(key.shadow.camera,{left:-2,right:2,top:2.5,bottom:-1.5,near:.5,far:12})
-key.shadow.bias=-.00015;key.shadow.normalBias=.0018;key.shadow.radius=8;key.shadow.blurSamples=12
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
+const maxDpr = mobile ? 1.75 : 2
+let dpr = Math.min(devicePixelRatio, maxDpr)
+renderer.setPixelRatio(dpr)
+renderer.setSize(innerWidth, innerHeight)
+renderer.outputColorSpace = THREE.SRGBColorSpace
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 0.95
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
+
+const scene = new THREE.Scene()
+const bg = new THREE.Color('#efe4d4')
+scene.background = bg
+scene.fog = new THREE.Fog(bg, 6, 14)
+const pmrem = new THREE.PMREMGenerator(renderer)
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+scene.environmentIntensity = 0.45
+
+// Soft daylight: warm key, cool sky fill, strong back rim so the fur halo glows.
+scene.add(new THREE.HemisphereLight('#fff6ea', '#9a8068', 0.55))
+const key = new THREE.DirectionalLight('#fff0dc', 2.4)
+key.position.set(-2.2, 3.4, 2.6)
+key.castShadow = true
+key.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048)
+Object.assign(key.shadow.camera, { left: -0.9, right: 0.9, top: 1.4, bottom: -0.4, near: 0.5, far: 9 })
+key.shadow.bias = -0.0004
+key.shadow.normalBias = 0.01
+key.shadow.radius = 4
 scene.add(key)
-const fill=new THREE.DirectionalLight('#e8eeff',.18);fill.position.set(3.5,1.6,3);scene.add(fill)
-const rim=new THREE.DirectionalLight('#ffe9c8',.35);rim.position.set(1,3,-3);scene.add(rim)
-const eyeFill=new THREE.DirectionalLight('#fff8ee',.07);eyeFill.position.set(0,1.2,4);scene.add(eyeFill)
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:'#ddd8cc',roughness:1}))
-floor.rotation.x=-Math.PI/2;floor.position.y=-.009;floor.receiveShadow=true;scene.add(floor)
-const shadowCanvas=document.createElement('canvas');shadowCanvas.width=shadowCanvas.height=256
-const ctx=shadowCanvas.getContext('2d'), gradient=ctx.createRadialGradient(128,128,0,128,128,128)
-gradient.addColorStop(0,'rgba(44,34,22,.45)');gradient.addColorStop(.4,'rgba(44,34,22,.20)');gradient.addColorStop(1,'rgba(44,34,22,0)')
-ctx.fillStyle=gradient;ctx.fillRect(0,0,256,256)
-const shadow=new THREE.Mesh(new THREE.PlaneGeometry(1.45,1.25),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(shadowCanvas),transparent:true,depthWrite:false}))
-shadow.rotation.x=-Math.PI/2;shadow.position.set(0,-.007,0);scene.add(shadow)
+const fill = new THREE.DirectionalLight('#dfe8ff', 0.5)
+fill.position.set(3, 1.2, 2)
+scene.add(fill)
+const rim = new THREE.DirectionalLight('#ffe2b8', 0.9)
+rim.position.set(1.5, 2.5, -3)
+scene.add(rim)
 
-const camera=new THREE.PerspectiveCamera(32,innerWidth/innerHeight,.05,40)
-const controls=new OrbitControls(camera,canvas)
-controls.enableDamping=true;controls.dampingFactor=.085;controls.enablePan=false
-controls.minDistance=.85;controls.maxDistance=7;controls.minPolarAngle=.25;controls.maxPolarAngle=1.55
-controls.autoRotate=false;controls.autoRotateSpeed=.45
-let model
-try {
-  const {buildPuppy}=await loadPuppy()
-  model=buildPuppy({quality:mobile?.60:1})
-} catch(error) {
-  document.querySelector('.veil-text').textContent='Bear could not load. Please reload the page.'
-  console.error('Puppy model failed to load',error)
-  throw error
+const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 64), new THREE.MeshStandardMaterial({ color: '#e6d9c6', roughness: 1 }))
+floor.rotation.x = -Math.PI / 2
+floor.receiveShadow = true
+scene.add(floor)
+// Contact shadow so the paws feel planted even where the shadow map is soft.
+{
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')
+  const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64)
+  grd.addColorStop(0, 'rgba(60,40,25,0.5)')
+  grd.addColorStop(0.5, 'rgba(60,40,25,0.22)')
+  grd.addColorStop(1, 'rgba(60,40,25,0)')
+  g.fillStyle = grd
+  g.fillRect(0, 0, 128, 128)
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.0), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }))
+  blob.rotation.x = -Math.PI / 2
+  blob.position.set(0.03, 0.002, -0.06)
+  scene.add(blob)
 }
-const {group:puppy,rig}=model
-scene.add(puppy)
-window.__bear={rig,controls,camera}
-let activeView='default'
-const portraitBounds=new THREE.Box3().setFromObject(puppy)
-const portraitCenter=portraitBounds.getCenter(new THREE.Vector3())
-const portraitHeight=portraitBounds.max.y-portraitBounds.min.y
-const fullTarget=[portraitCenter.x,portraitBounds.min.y+portraitHeight*.51,portraitCenter.z]
-const faceTarget=[rig.head.position.x,rig.head.position.y+.095,rig.head.position.z+.09]
-const views={
-  default:{target:fullTarget,offset:[1.65,.55,2.6]},
-  face:{target:faceTarget,offset:[.07,.055,1.28]},
-  side:{target:fullTarget,offset:[3.7,.25,.12]},
-  front:{target:fullTarget,offset:[0,.18,3.5]}
+
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 30)
+const controls = new OrbitControls(camera, canvas)
+controls.enableDamping = true
+controls.dampingFactor = 0.08
+controls.enablePan = false
+controls.minDistance = 0.8
+controls.maxDistance = 5
+controls.minPolarAngle = 0.3
+controls.maxPolarAngle = 1.62
+controls.autoRotateSpeed = 0.8
+
+// Let the loading veil paint before the (synchronous) sculpt + mesh step.
+await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)))
+const t0 = performance.now()
+const bear = buildBear({ quality, fur: !params.has('nofur') })
+let verts = 0
+bear.root.traverse(o => { if (o.isMesh && !o.isInstancedMesh) verts += o.geometry.attributes.position.count })
+console.info(`Bear built in ${Math.round(performance.now() - t0)} ms: ${verts} skin vertices, ${bear.stats.shells} fur shells`)
+scene.add(bear.root)
+const { rig } = bear
+window.__bear = { rig, camera, controls, scene }
+
+const views = {
+  full: { target: [0, 0.55, 0], dir: [0.55, 0.28, 1], dist: 3.1 },
+  face: { target: [0, 0.9, 0.18], dir: [0.18, 0.06, 1], dist: 1.25 },
+  side: { target: [0.02, 0.5, -0.05], dir: [1, 0.22, 0.1], dist: 3.2 },
 }
-function fitView(name) {
-  const view=views[name]||views.default
-  const factor=Math.max(1,(name==='face'?.51:.75)/camera.aspect)
-  controls.target.set(...view.target)
-  camera.position.set(...view.offset).multiplyScalar(factor).add(controls.target)
+let tween = null
+function setView(name, instant = false) {
+  const v = views[name] || views.full
+  const fit = Math.max(1, 0.72 / camera.aspect)
+  const target = new THREE.Vector3(...v.target)
+  const pos = new THREE.Vector3(...v.dir).normalize().multiplyScalar(v.dist * fit).add(target)
+  document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === name)))
+  if (instant) {
+    controls.target.copy(target)
+    camera.position.copy(pos)
+    controls.update()
+    return
+  }
+  tween = { from: camera.position.clone(), fromT: controls.target.clone(), to: pos, toT: target, t: 0 }
+}
+setView(params.get('view') || 'full', true)
+
+// ---------- Behaviour --------------------------------------------------------------
+
+const state = {
+  paused: reducedMotion || params.has('still'),
+  excite: 0, // 0 calm .. 1 very happy (after a pet)
+  look: new THREE.Vector2(), lookTarget: new THREE.Vector2(),
+  tilt: 0, tiltTarget: 0, nextTilt: 3,
+  blink: 0, nextBlink: 2,
+  earTwitch: [0, 0], nextTwitch: 1.5,
+  pointerActive: 0,
+}
+const pointer = new THREE.Vector2()
+addEventListener('pointermove', e => {
+  pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1)
+  state.pointerActive = 2.5
+})
+
+const raycaster = new THREE.Raycaster()
+let downAt = null
+canvas.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY] })
+canvas.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return
+  raycaster.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera)
+  if (raycaster.intersectObjects(bear.pickables, false).length) pet()
+})
+
+function pet() {
+  state.excite = 1
+  state.tiltTarget = (Math.random() < 0.5 ? -1 : 1) * 0.28
+  state.nextTilt = 2.5
+  if (state.paused) render(1 / 60)
+}
+window.petBear = pet
+window.setView = setView
+window.toggleMotion = () => {
+  state.paused = !state.paused
+  document.getElementById('motion-button').setAttribute('aria-pressed', String(state.paused))
+  document.getElementById('motion-button').textContent = state.paused ? 'Resume' : 'Pause'
+}
+window.toggleRotate = () => {
+  controls.autoRotate = !controls.autoRotate
+  document.getElementById('rotate-button').setAttribute('aria-pressed', String(controls.autoRotate))
+}
+if (state.paused) {
+  const b = document.getElementById('motion-button')
+  b.setAttribute('aria-pressed', 'true')
+  b.textContent = 'Resume'
+}
+
+const headWorld = new THREE.Vector3()
+const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt))
+let time = 0
+
+function animate(dt) {
+  time += dt
+  const s = state
+  s.excite = Math.max(0, s.excite - dt * 0.18)
+  const ex = s.excite
+
+  // Where to look: the pointer when it's moving, otherwise the camera with idle wander.
+  s.pointerActive -= dt
+  if (s.pointerActive > 0) {
+    s.lookTarget.set(pointer.x * 0.6, pointer.y * 0.35 + 0.05)
+  } else {
+    rig.neck.getWorldPosition(headWorld)
+    const toCam = camera.position.clone().sub(headWorld)
+    const yaw = Math.atan2(toCam.x, toCam.z)
+    const pitch = Math.atan2(toCam.y - 0.2, Math.hypot(toCam.x, toCam.z))
+    s.lookTarget.set(
+      clamp(yaw, -0.7, 0.7) + Math.sin(time * 0.31) * 0.12,
+      clamp(pitch * 0.5, -0.15, 0.3) + Math.sin(time * 0.23) * 0.05,
+    )
+  }
+  s.look.x = damp(s.look.x, s.lookTarget.x, 3, dt)
+  s.look.y = damp(s.look.y, s.lookTarget.y, 3, dt)
+
+  // Curious head tilt now and then.
+  s.nextTilt -= dt
+  if (s.nextTilt < 0) {
+    s.tiltTarget = s.tiltTarget !== 0 ? 0 : (Math.random() < 0.5 ? -1 : 1) * (0.15 + Math.random() * 0.15)
+    s.nextTilt = s.tiltTarget !== 0 ? 1.6 + Math.random() : 3 + Math.random() * 4
+  }
+  s.tilt = damp(s.tilt, s.tiltTarget, 5, dt)
+
+  const breathe = Math.sin(time * (2.2 + ex * 5))
+  rig.neck.rotation.set(-s.look.y * 0.6 + breathe * 0.01, s.look.x * 0.75, 0)
+  rig.headRig.rotation.set(-s.look.y * 0.5, s.look.x * 0.25, s.tilt)
+  rig.chest.scale.set(1 + breathe * 0.006, 1, 1 + breathe * 0.01)
+
+  // Eyes track a little ahead of the head; blinks are quick.
+  s.nextBlink -= dt
+  if (s.nextBlink < 0) { s.blink = 1; s.nextBlink = 2 + Math.random() * 4 }
+  s.blink = Math.max(0, s.blink - dt * 7)
+  const lid = 1 - Math.sin(s.blink * Math.PI) * 0.92 - ex * 0.25
+  for (const eye of rig.eyes) {
+    eye.userData.ball.rotation.set(-s.look.y * 0.3, s.look.x * 0.3, 0)
+    eye.scale.y = Math.max(0.08, lid)
+  }
+
+  // Ears: perk forward when curious, ease back when happy, with small twitches.
+  s.nextTwitch -= dt
+  if (s.nextTwitch < 0) {
+    s.earTwitch[Math.random() < 0.5 ? 0 : 1] = 1
+    s.nextTwitch = 1.5 + Math.random() * 3.5
+  }
+  rig.ears.forEach((ear, i) => {
+    s.earTwitch[i] = Math.max(0, s.earTwitch[i] - dt * 5)
+    const side = i === 0 ? -1 : 1
+    const tw = Math.sin(s.earTwitch[i] * Math.PI)
+    ear.rotation.set(-ex * 0.45 + tw * 0.15, 0, side * (tw * 0.12 + ex * 0.2))
+  })
+
+  // Tail sweeps along the floor; faster and wider when happy.
+  const wag = Math.sin(time * (3 + ex * 11)) * (0.1 + ex * 0.35)
+  rig.tail.rotation.set(0, wag, 0)
+
+  // Panting tongue.
+  const pant = Math.sin(time * (5 + ex * 7))
+  rig.tongue.scale.setScalar(1 + ex * 0.25)
+  rig.tongue.rotation.x = pant * (0.05 + ex * 0.08)
+  rig.tag.rotation.z = Math.sin(time * 2.1) * 0.08 + wag * 0.2
+
+  furUniforms.uTime.value = time
+  furUniforms.uWind.value.set(Math.sin(time * 0.7) * 0.06, 0, Math.cos(time * 0.5) * 0.04)
+}
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x))
+
+// ---------- Loop -------------------------------------------------------------------
+
+const clock = new THREE.Clock()
+let slowFrames = 0
+function render(dt) {
+  if (tween) {
+    tween.t = Math.min(1, tween.t + dt * 1.6)
+    const e = 1 - Math.pow(1 - tween.t, 3)
+    camera.position.lerpVectors(tween.from, tween.to, e)
+    controls.target.lerpVectors(tween.fromT, tween.toT, e)
+    if (tween.t >= 1) tween = null
+  }
   controls.update()
+  renderer.render(scene, camera)
 }
-window.setView=name=>{
-  activeView=views[name]?name:'default';controls.autoRotate=false
-  document.getElementById('rotate-button')?.setAttribute('aria-pressed','false')
-  fitView(activeView)
-  document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===activeView)))
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05)
+  if (!state.paused) animate(dt)
+  render(dt)
+  // Adaptive resolution: step down if the GPU can't keep up.
+  if (dt > 1 / 40) slowFrames++
+  else slowFrames = Math.max(0, slowFrames - 1)
+  if (slowFrames > 45 && dpr > 1) {
+    dpr = Math.max(1, dpr - 0.25)
+    renderer.setPixelRatio(dpr)
+    slowFrames = 0
+  }
 }
-fitView(activeView)
-controls.addEventListener('start',()=>{controls.autoRotate=false;document.getElementById('rotate-button')?.setAttribute('aria-pressed','false')})
-window.toggleRotate=()=>{
-  controls.autoRotate=!controls.autoRotate
-  document.getElementById('rotate-button').setAttribute('aria-pressed',String(controls.autoRotate))
-}
-let paused=reducedMotion.matches
-window.toggleMotion=()=>{
-  paused=!paused
-  const button=document.getElementById('motion-button')
-  button.textContent=paused?'Play motion':'Pause motion';button.setAttribute('aria-pressed',String(paused))
-  if(paused) { rig.setBlink(0); blinkTime=-1 }
-}
-if(paused) {document.getElementById('motion-button').textContent='Play motion';document.getElementById('motion-button').setAttribute('aria-pressed','true')}
+animate(0.016)
+renderer.setAnimationLoop(frame)
 
-const random=seededRandom(718), randomRange=(a,b)=>a+(b-a)*random()
-const look={yaw:0,pitch:0,roll:0,targetYaw:0,targetPitch:0,targetRoll:0,wait:3}
-const pointer={x:0,y:0,last:-100}
-let elapsed=0,petTime=0,blinkWait=2.8,blinkTime=-1,tailPhase=0,tailLevel=.25,tailWait=2
-const earState=rig.ears.map(e=>({...e,wait:randomRange(3,7),phase:-1}))
-canvas.addEventListener('pointermove',e=>{
-  if(e.pointerType==='mouse' && e.buttons===0){pointer.x=e.clientX/innerWidth*2-1;pointer.y=e.clientY/innerHeight*2-1;pointer.last=elapsed}
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize(innerWidth, innerHeight)
 })
-canvas.addEventListener('pointerleave',()=>{pointer.last=-100})
-window.petBear=()=>{if(!paused){petTime=2.4;tailLevel=.9;look.targetRoll=-.065}}
-const raycaster=new THREE.Raycaster(), mouse=new THREE.Vector2()
-let down=null
-canvas.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY}})
-canvas.addEventListener('pointerup',e=>{
-  if(!down||Math.hypot(e.clientX-down.x,e.clientY-down.y)>6) return
-  mouse.set(e.clientX/innerWidth*2-1,1-e.clientY/innerHeight*2)
-  raycaster.setFromCamera(mouse,camera)
-  if(raycaster.intersectObject(puppy,true).length) window.petBear()
-  down=null
+
+requestAnimationFrame(() => {
+  document.getElementById('veil').classList.add('hide')
+  window.__bearReady = true
 })
-function animate(dt){
-  elapsed+=dt
-  const t=elapsed, breath=Math.sin(t*2.5)
-  rig.breath.value=breath
-  look.wait-=dt
-  if(look.wait<0){
-    look.wait=randomRange(2.8,5.4);look.targetYaw=randomRange(-.20,.20)
-    look.targetPitch=randomRange(-.065,.065);look.targetRoll=random()<.25?randomRange(-.055,.055):0
-  }
-  const attention=Math.max(0,1-(t-pointer.last)/2.5)*.24
-  const k=1-Math.exp(-dt*3)
-  look.yaw+=(look.targetYaw*(1-attention)+pointer.x*.3*attention-look.yaw)*k
-  look.pitch+=(look.targetPitch+pointer.y*.16*attention-look.pitch)*k
-  look.roll+=(look.targetRoll-look.roll)*(1-Math.exp(-dt*2))
-  rig.head.rotation.set(look.pitch+breath*.003,look.yaw,look.roll)
-  petTime=Math.max(0,petTime-dt)
-  blinkWait-=dt
-  if(blinkWait<0&&blinkTime<0){blinkTime=0;blinkWait=randomRange(2.6,6.2)}
-  if(blinkTime>=0){
-    blinkTime+=dt
-    const closure=Math.sin(Math.min(1,blinkTime/.19)*Math.PI)
-    rig.setBlink(closure)
-    if(blinkTime>=.19){blinkTime=-1;rig.setBlink(0)}
-  }
-  for(const ear of earState){
-    ear.wait-=dt
-    if(ear.wait<0){ear.wait=randomRange(4,9);ear.phase=0}
-    if(ear.phase>=0){ear.phase+=dt;const envelope=Math.sin(Math.min(1,ear.phase/.38)*Math.PI)
-      ear.group.rotation.z=ear.baseZ+envelope*.065;ear.group.rotation.x=ear.baseX+envelope*.05
-      if(ear.phase>=.38)ear.phase=-1
-    }
-  }
-  tailWait-=dt
-  if(tailWait<0){tailWait=randomRange(2,4);tailLevel=randomRange(.1,.45)}
-  const wag=petTime>0?.72:tailLevel
-  tailPhase+=dt*(6+wag*4)
-  rig.tail.rotation.y=Math.sin(tailPhase)*wag
-  rig.tail.rotation.z=Math.sin(tailPhase+.6)*wag*.20
-  const pant=Math.sin(t*(petTime>0?8.5:7))
-  rig.jaw.rotation.x=.035+pant*.006
-  rig.tongue.rotation.x=.035+pant*.018
-  rig.pendant.rotation.x=Math.sin(t*2.5+.7)*.025
-  rig.pendant.rotation.z=-look.yaw*.07+Math.sin(t*2.5)*.009
-}
-const clock=new THREE.Clock()
-let frame=0, measurementStart=0, performanceFrames=0, frameTime=0
-renderer.setAnimationLoop(()=>{
-  const rawDelta=clock.getDelta()
-  const dt=Math.min(rawDelta,.05)
-  if(!paused&&!document.hidden)animate(dt)
-  controls.update();renderer.render(scene,camera)
-  if(!document.hidden && frame>3){
-    frameTime+=rawDelta;performanceFrames++
-    if(performanceFrames===180){
-      if(frameTime>6 && renderer.getPixelRatio()>1){
-        renderer.setPixelRatio(Math.max(1,renderer.getPixelRatio()*.8))
-        renderer.setSize(innerWidth,innerHeight)
-      }
-      performanceFrames=0;frameTime=0
-    }
-  }
-  if(++frame===3){canvas.dataset.ready='true';document.getElementById('veil')?.classList.add('hide');measurementStart=performance.now()}
-  if(frame===123 && import.meta.env.DEV) console.info('Bear render check '+JSON.stringify({fps:Math.round(120000/(performance.now()-measurementStart)),triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls}))
-})
-window.addEventListener('resize',()=>{
-  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()
-  renderer.setSize(innerWidth,innerHeight);fitView(activeView)
-})
-setTimeout(()=>document.getElementById('hint')?.classList.add('fade'),8000)
+setTimeout(() => document.getElementById('hint')?.classList.add('fade'), 7000)
