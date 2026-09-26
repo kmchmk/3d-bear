@@ -10,7 +10,6 @@ photo/render so the rendered coat matches the photo under the site's own lightin
 import sys, json, cv2, numpy as np
 
 view, render_path = sys.argv[1], sys.argv[2]
-prof = json.load(open('fit/data/profiles.json'))[view]
 pal_path = 'src/palette.json'
 pal = json.load(open(pal_path))
 
@@ -20,50 +19,60 @@ def lin_to_hex(l):
     return '#' + ''.join(f'{int(round(v * 255)):02x}' for v in np.clip(c, 0, 1))
 def hex_to_lin(h): return srgb_to_lin(np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)], float))
 
-# Regions in normalised coords, from the TARGET landmarks: (u, v) = ((x - nose_x)/H, (y - top)/H)
-lm = prof['target']['lm']
-eyes = [e for e in lm['eyes'] if e]
-E = np.mean(eyes, axis=0); N = np.array(lm['nose'])
-e = abs(eyes[0][0] - eyes[1][0]) if len(eyes) == 2 else 0.06
-regions = {                      # palette key: list of sample points
-    'ginger': [E + [0, -0.9 * e], E + [-1.1 * e, -1.4 * e], E + [1.1 * e, -1.4 * e]],
-    'mask': [(E + N) / 2],
-    'cream': [E + [-1.1 * e, 0.9 * e], E + [1.1 * e, 0.9 * e]],
-    'bib': [np.array([0, 0.5])],
-    'leg': [np.array([-0.09, 0.8]), np.array([0.09, 0.8])],
-    'white': [np.array([-0.1, 0.965]), np.array([0.1, 0.965])],
-}
+sys.path.insert(0, 'fit')
+from segment import segment
+from landmarks import detect
 
-def sample(img, anchor, pts, rad):
-    top, H, ax = anchor['top'], anchor['H'], anchor['ax']
+# Each image gets its own silhouette and landmarks from the same pixel rules, and
+# regions are placed relative to them, so framing differences cannot shift samples.
+def frame(img, known=None):
+    img, m = segment(img)
+    lm = detect(img, m > 0)
+    if known:  # exact projected landmarks for a render from the fitted camera
+        lm.update(known(img.shape[0]))
+    eyes = sorted(lm['eyes'])
+    E = np.mean(eyes, axis=0); N = np.array(lm['nose'])
+    e = abs(eyes[1][0] - eyes[0][0])         # inter-eye distance in pixels
+    H = lm['bottom'] - lm['top']
+    mid = np.array([N[0], 0])
+    pts = {
+        'ginger': [E + [0, -0.7 * e], E + [-0.3 * e, -0.55 * e], E + [0.3 * e, -0.55 * e]],
+        'mask': [E + (N - E) * 0.45],
+        'cream': [np.array(eyes[0]) + [-0.1 * e, 0.85 * e], np.array(eyes[1]) + [0.1 * e, 0.85 * e]],
+        'bib': [mid + [0, lm['top'] + 0.5 * H]],
+        'leg': [mid + [-0.085 * H, lm['top'] + 0.8 * H], mid + [0.085 * H, lm['top'] + 0.8 * H]],
+        'white': [mid + [-0.095 * H, lm['top'] + 0.965 * H], mid + [0.095 * H, lm['top'] + 0.965 * H]],
+    }
+    return img, pts, max(2, int(0.012 * H))
+
+def sample(img, pts, r):
     out = []
-    for u, v in pts:
-        x, y = int(round(ax + u * H)), int(round(top + v * H))
-        r = max(2, int(rad * H))
+    for x, y in pts:
+        x, y = int(round(x)), int(round(y))
         patch = img[max(0, y - r):y + r + 1, max(0, x - r):x + r + 1].reshape(-1, 3)[:, ::-1].astype(float)
         out.append(np.median(patch, axis=0))
     return srgb_to_lin(np.mean(out, axis=0))
 
-photo = cv2.imread(f'fit/data/{view}_img.jpg')
-pa = dict(prof['target']['anchor']); s = photo.shape[0] / pa['h']
-pa = {k: pa[k] * s for k in ('top', 'H', 'ax')}
-rend = cv2.imread(render_path)
-ra = dict(prof['render']['anchor']); s = rend.shape[0] / ra['h']
-ra = {k: ra[k] * s for k in ('top', 'H', 'ax')}
-
+photo, ppts, prad = frame(cv2.imread(f'fit/data/{view}_img.jpg'))
+prof = json.load(open('fit/data/profiles.json'))[view]['render']
+def projected(h):
+    a = prof['anchor']; k = h / a['h']
+    px = lambda p: [(a['ax'] + p[0] * a['H']) * k, (a['top'] + p[1] * a['H']) * k]
+    return {'eyes': [px(e) for e in prof['lm']['eyes']], 'nose': px(prof['lm']['nose'])}
+rend, rpts, rrad = frame(cv2.imread(render_path), projected)
 vis_p, vis_r = photo.copy(), rend.copy()
 report = {}
-for key, pts in regions.items():
-    cp = sample(photo, pa, pts, 0.012); cr = sample(rend, ra, pts, 0.012)
-    ratio = np.clip(cp / np.maximum(cr, 1e-4), 0.5, 2.0)
-    targets = {'ginger': ['ginger', 'gingerDeep', 'gingerLight'], 'mask': ['mask', 'maskDark'], 'cream': ['cream'], 'bib': ['cream'], 'leg': ['gingerLight'], 'white': ['white']}[key]
+for key in ppts:
+    cp = sample(photo, ppts[key], prad); cr = sample(rend, rpts[key], rrad)
+    ratio = np.clip(cp / np.maximum(cr, 1e-4), 0.4, 2.5)
+    targets = {'ginger': ['ginger', 'gingerDeep', 'gingerLight'], 'mask': ['mask', 'maskDark'], 'cream': ['cream'], 'bib': ['cream'], 'leg': ['leg'], 'white': ['white']}[key]
     report[key] = {'photo': lin_to_hex(cp), 'render': lin_to_hex(cr), 'ratio': [round(float(v), 3) for v in ratio]}
     for t in targets:
         # Several regions may feed one entry (cream: cheeks + bib); take the geometric mean.
         report.setdefault('_apply', {}).setdefault(t, []).append(ratio)
-    for img, a in ((vis_p, pa), (vis_r, ra)):
-        for u, v in pts:
-            cv2.circle(img, (int(a['ax'] + u * a['H']), int(a['top'] + v * a['H'])), max(3, int(0.012 * a['H'])), (0, 255, 0), 1)
+    for img, pts, r in ((vis_p, ppts[key], prad), (vis_r, rpts[key], rrad)):
+        for x, y in pts:
+            cv2.circle(img, (int(x), int(y)), r, (0, 255, 0), 1)
 for t, rs in report.pop('_apply').items():
     ratio = np.exp(np.mean(np.log(rs), axis=0))
     pal[t] = lin_to_hex(np.clip(hex_to_lin(pal[t]) * ratio, 0, 1))

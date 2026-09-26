@@ -9,12 +9,8 @@ Writes fit/data/landmarks.json with pixel coordinates (image height = 640).
 import os, json, cv2, numpy as np
 
 D = 'fit/data'
-out = {}
-for f in sorted(os.listdir(D)):
-    if not f.endswith('_mask.png'): continue
-    key = f[:-9]
-    img = cv2.imread(f'{D}/{key}_img.jpg')
-    m = cv2.imread(f'{D}/{key}_mask.png', 0) > 0
+
+def detect(img, m):
     ys, xs = np.nonzero(m)
     top, bot = ys.min(), ys.max()
     hgt = bot - top
@@ -53,10 +49,20 @@ for f in sorted(os.listdir(D)):
     n, lab, st, cen = cv2.connectedComponentsWithStats(dark)
     k = 1 + np.argmax(st[1:, cv2.CC_STAT_AREA])
     nose = [float(cen[k][0]), float(cen[k][1])]
-    out[key] = {'size': [m.shape[1], m.shape[0]], 'earL': ears[0], 'earR': ears[1], 'eyes': eyes, 'nose': nose, 'top': int(top), 'bottom': int(bot)}
+    return {'size': [m.shape[1], m.shape[0]], 'earL': ears[0], 'earR': ears[1], 'eyes': eyes, 'nose': nose, 'top': int(top), 'bottom': int(bot)}
+
+if __name__ == '__main__':
+  out = {}
+  for f in sorted(os.listdir(D)):
+    if not f.endswith('_mask.png'): continue
+    key = f[:-9]
+    img = cv2.imread(f'{D}/{key}_img.jpg')
+    m = cv2.imread(f'{D}/{key}_mask.png', 0) > 0
+    out[key] = detect(img, m)
+    ears, eyes, nose = [out[key]['earL'], out[key]['earR']], out[key]['eyes'], out[key]['nose']
     vis = img.copy()
     for p in ears + eyes + [nose]:
         cv2.circle(vis, (int(p[0]), int(p[1])), 5, (0, 255, 0), 2)
     cv2.imwrite(f'{D}/{key}_lm.jpg', vis)
     print(key, out[key])
-json.dump(out, open(f'{D}/landmarks.json', 'w'), indent=1)
+  json.dump(out, open(f'{D}/landmarks.json', 'w'), indent=1)
